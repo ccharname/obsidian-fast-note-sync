@@ -109,7 +109,7 @@ jobs:
             styles.css
 
       - name: Sync to CNB (Optional)
-        if: "${{ secrets.CNB_TOKEN != '' }}"
+        if: env.CNB_TOKEN != ''
         env:
           CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
           CNB_REPO: haierkeys/obsidian-fast-note-sync
