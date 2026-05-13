@@ -91,7 +91,7 @@ jobs:
 
       - name: Sync to CNB (Optional)
         # 仅在配置了 CNB_TOKEN 时运行
-        if: "${{ secrets.CNB_TOKEN != '' }}"
+        if: ${{ secrets.CNB_TOKEN }}
         env:
           CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
           CNB_REPO: haierkeys/obsidian-fast-note-sync
