@@ -43,22 +43,30 @@ jobs:
       - name: Resolve Version and Note
         id: version
         run: |
-          # Resolve Version
+          # 1. Resolve Version
           INPUT_TAG="${{ github.event.inputs.tag_name }}"
           if [ -z "$INPUT_TAG" ]; then
             CURRENT_VERSION=$(jq -r .version manifest.json)
             echo "Using version from manifest.json: $CURRENT_VERSION"
-            echo "tag=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+            TARGET_TAG="$CURRENT_VERSION"
           else
             echo "Using manual tag: $INPUT_TAG"
-            echo "tag=$INPUT_TAG" >> $GITHUB_OUTPUT
+            TARGET_TAG="$INPUT_TAG"
           fi
+          
+          # 2. Force Check Git Tag
+          echo "Checking if tag '$TARGET_TAG' exists..."
+          if ! git rev-parse "$TARGET_TAG" >/dev/null 2>&1; then
+            echo "::error::Tag '$TARGET_TAG' does not exist in the repository. Please create the tag first."
+            exit 1
+          fi
+          echo "tag=$TARGET_TAG" >> $GITHUB_OUTPUT
 
-          # Resolve Release Note
+          # 3. Resolve Release Note
           INPUT_NOTE="${{ github.event.inputs.release_note }}"
           if [ -z "$INPUT_NOTE" ]; then
-            COMMIT_MSG=$(git log -1 --pretty=%B)
-            echo "Using latest commit message as release note."
+            echo "Release note is empty, fetching commit message for $TARGET_TAG..."
+            COMMIT_MSG=$(git log -1 --pretty=%B "$TARGET_TAG")
             echo "note<<EOF" >> $GITHUB_OUTPUT
             echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
