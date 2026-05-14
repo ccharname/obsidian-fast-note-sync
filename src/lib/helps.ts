@@ -91,7 +91,7 @@ export const isPathMatch = function (path: string, pattern: string, caseSensitiv
     }
 
     if (regex.test(path)) return true
-  } catch (e) {
+  } catch {
     // 如果正则非法，则忽略错误，继续后续的路径匹配逻辑
   }
 
@@ -135,17 +135,20 @@ export const parseRules = function (setting: string): SyncRule[] {
   // 检查是否为 JSON 格式
   if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
     try {
-      const parsed = JSON.parse(trimmed)
+      const parsed = JSON.parse(trimmed) as unknown[]
       if (Array.isArray(parsed)) {
         isJsonParsed = true
         rules = parsed
-          .map((item) => ({
-            pattern: typeof item === "string" ? item : item.pattern || "",
-            caseSensitive: !!item.caseSensitive,
-          }))
+          .map((item) => {
+            const ruleItem = item as { pattern?: string; caseSensitive?: boolean }
+            return {
+              pattern: typeof item === "string" ? item : ruleItem.pattern || "",
+              caseSensitive: !!ruleItem.caseSensitive,
+            }
+          })
           .filter((item) => item.pattern !== "")
       }
-    } catch (e) {
+    } catch {
       // 解析失败，视为普通文本
     }
   }
@@ -391,7 +394,7 @@ async function readRange(app: App, path: string, offset: number, length: number)
   const url = app.vault.adapter.getResourcePath(path)
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 秒超时
+  const timeoutId = window.setTimeout(() => controller.abort(), 5000) // 5 秒超时
 
   try {
     const response = await fetch(url, {
@@ -412,12 +415,12 @@ async function readRange(app: App, path: string, offset: number, length: number)
     }
     throw new Error(`Failed to read file range via fetch: ${response.status}`)
   } catch (error) {
-    if (error.name === 'AbortError') {
+    if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(`Read file range timeout (5s) for: ${path}`)
     }
     throw error
   } finally {
-    clearTimeout(timeoutId)
+    window.clearTimeout(timeoutId)
   }
 }
 
@@ -451,7 +454,7 @@ export const hashFileAsync = async function (app: App, path: string): Promise<st
       view.set(headUint8.subarray(0, Math.min(headUint8.length, FILE_HASH_SLICE_SIZE)), 0)
       view.set(tailUint8.subarray(0, Math.min(tailUint8.length, FILE_HASH_SLICE_SIZE)), FILE_HASH_SLICE_SIZE)
     } catch (e) {
-      dump(`hashFileAsync: readRange failed or timeout, falling back to full read for ${path}: ${e.message}`);
+      dump(`hashFileAsync: readRange failed or timeout, falling back to full read for ${path}: ${(e as Error).message}`);
       // 兜底方案：加载完整文件内容 (Fallback: read full file)
       const buffer = await app.vault.adapter.readBinary(path)
       const fullView = new Uint8Array(buffer)
@@ -545,7 +548,7 @@ export const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(
  * 防抖函数
  */
 export function debounce<T extends (...args: unknown[]) => unknown>(func: T, wait: number): (...args: Parameters<T>) => void {
-  let timeout: any = null
+  let timeout: number | null = null
   return function (this: unknown, ...args: Parameters<T>) {
     if (timeout) window.clearTimeout(timeout)
     timeout = window.setTimeout(() => {
@@ -595,13 +598,13 @@ export function isWsUrl(url: string): boolean {
  * 为 URL 增加随机参数以防止缓存
  */
 export function addRandomParam(url: string): string {
-  const separator = url.includes("?") ? "&" : "?"
-  const randomStr = Math.random().toString(36).substring(2, 8)
-  return `${url}${separator}_t=${Date.now()}&_r=${randomStr}`
+    const separator = url.includes("?") ? "&" : "?"
+    const randomStr = Math.random().toString(36).substring(2, 8)
+    return `${url}${separator}_t=${Date.now()}&_r=${randomStr}`
 }
 
 /**
- * 生成 UUID v4 (兼性更好的版本)
+ * 生成 UUID v4 (兼容性更好的版本)
  */
 export function generateUUID(): string {
   // 优先使用标准 API
@@ -613,7 +616,9 @@ export function generateUUID(): string {
   if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
     return (([1e7] as unknown as string) + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c: string) => {
       const cNum = parseInt(c);
-      return (cNum ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (cNum / 4)))).toString(16);
+      const randomValues = new Uint8Array(1);
+      crypto.getRandomValues(randomValues);
+      return (cNum ^ (randomValues[0] & (15 >> (cNum / 4)))).toString(16);
     })
   }
 
@@ -729,7 +734,7 @@ export function showSyncNotice(message: string, duration: number = 2500): SyncNo
   toast.className = "fns-mobile-toast"
   toast.textContent = message
 
-  let hideTimeout: any = null
+  let hideTimeout: number | null = null;
 
   const startHide = () => {
     if (toast.parentElement) {

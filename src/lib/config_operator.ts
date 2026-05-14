@@ -18,7 +18,7 @@ export const CONFIG_THEME_EXTS_TO_WATCH = [".css", ".json"]
  * 配置操作函数导出
  */
 
-let reloadTimer: any = null
+let reloadTimer: number | null = null
 const pendingConfigUpdates: Map<string, string> = new Map()
 
 export const configModify = async function (path: string, plugin: FastSync, eventEnter: boolean = false, content?: string) {
@@ -556,7 +556,7 @@ export const configEmptyFoldersClean = async function (configDir: string, plugin
                     await plugin.app.vault.adapter.rmdir(normalizePath(folder), true)
                 }
             }
-        } catch (e) { }
+        } catch { }
     }
 }
 
@@ -587,8 +587,8 @@ export const configReload = async function (path: string, plugin: FastSync, even
         const app = plugin.app as App & {
             vault: {
                 reloadConfig?(): Promise<void>;
-                getConfig(key: string): any;
-                setConfig(key: string, value: any): void;
+                getConfig(key: string): unknown;
+                setConfig(key: string, value: unknown): void;
             };
             customCss?: {
                 themes: Record<string, unknown>;
@@ -624,21 +624,23 @@ export const configReload = async function (path: string, plugin: FastSync, even
         for (const [p, d] of updates) {
             if (p === `${configDir}/app.json` || p === `${configDir}/appearance.json`) {
                 try {
-                    const config = JSON.parse(d)
+                    const config = JSON.parse(d) as Record<string, unknown>;
                     // 仅在值确实改变时才设置，减少刷新频率
                     for (const key in config) {
-                        if (app.vault.getConfig(key) !== config[key]) {
-                            app.vault.setConfig(key, config[key])
+                        if (Object.prototype.hasOwnProperty.call(config, key)) {
+                            if (app.vault.getConfig(key) !== config[key]) {
+                                app.vault.setConfig(key, config[key]);
+                            }
                         }
                     }
 
                     if (p === `${configDir}/appearance.json` && app.customCss) {
                         // 修正属性名：社区主题使用的是 cssTheme
-                        const targetTheme = config.cssTheme;
+                        const targetTheme = config.cssTheme as string | undefined;
                         if (targetTheme !== undefined) {
                             // 核心检查：在切换主题前，先检查本地是否存在该主题文件
                             // 防止因为同步延迟导致主题文件夹还没下载完就切换，触发 Obsidian 的自动回落
-                            const themes = (app.customCss as any).themes || {};
+                            const themes = (app.customCss as unknown as { themes?: Record<string, unknown> }).themes || {};
                             if (targetTheme === "" || themes.hasOwnProperty(targetTheme)) {
                                 if (app.customCss.theme !== targetTheme) {
                                     app.customCss.setTheme(targetTheme)
@@ -654,7 +656,7 @@ export const configReload = async function (path: string, plugin: FastSync, even
                 }
             } else if (p === `${configDir}/community-plugins.json`) {
                 try {
-                    const newP = JSON.parse(d)
+                    const newP = JSON.parse(d) as string[]
                     const oldP = plugin.configManager ? Array.from(plugin.configManager.enabledPlugins) : []
                     const toE = newP.filter((p: string) => !oldP.includes(p))
                     const toD = oldP.filter((p: string) => !newP.includes(p))
@@ -669,7 +671,7 @@ export const configReload = async function (path: string, plugin: FastSync, even
                     for (const id of toD) {
                         if (id != "hot-reload" && id != "fast-note-sync") await app.plugins.disablePlugin(id)
                     }
-                } catch (e) { }
+                } catch { }
             } else if (p === `${configDir}/hotkeys.json`) {
                 if (app.hotkeys) await app.hotkeys.load()
             } else if (p.startsWith(`${configDir}/snippets/`) && p.endsWith(".css")) {

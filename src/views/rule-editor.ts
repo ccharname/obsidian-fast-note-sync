@@ -1,5 +1,5 @@
 import { App, MarkdownRenderer, Component, Platform } from "obsidian";
-import { PathSuggest } from "./path-suggest";
+import { PathSuggest, PathSuggestOptions } from "./path-suggest";
 import { SyncRule } from "../lib/helps";
 import { $ } from "../i18n/lang";
 
@@ -15,7 +15,7 @@ export class RuleEditor {
   private inputPlaceholder: string;
   private component: Component;
   private usePathSuggest: boolean;
-  private pathSuggestOptions: unknown;
+  private pathSuggestOptions: PathSuggestOptions;
   private saveTimer: number | null = null;
   private lastSavedJson: string = "";
 
@@ -30,7 +30,7 @@ export class RuleEditor {
     addButtonText?: string,
     inputPlaceholder?: string,
     usePathSuggest: boolean = false,
-    pathSuggestOptions: unknown = {}
+    pathSuggestOptions: PathSuggestOptions = {}
   ) {
     this.containerEl = containerEl;
     this.app = app;
@@ -140,7 +140,7 @@ export class RuleEditor {
             this.rules[index].pattern = val;
             updateHeight(inputEl, true);
             this.save(true); // 补全选择后立即保存比较好 / Better to save immediately after completion selection
-          }, this.pathSuggestOptions as any);
+          }, this.pathSuggestOptions);
         }
 
         // 大小写敏感开关 (Aa) / Case sensitive toggle (Aa)

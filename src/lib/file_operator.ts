@@ -4,7 +4,7 @@ import { ReceiveFileSyncUpdateMessage, FileUploadMessage, FileSyncChunkDownloadM
 import { hashContent, hashArrayBuffer, getPluginDir, dump, sleep, dumpTable, isPathExcluded, getSafeCtime, isLargeBinarySyncRisk, describeBinarySyncLimit, showSyncNotice, logMemorySnapshot, hashFileAsync } from "./helps";
 import { FileCloudPreview } from "./file_cloud_preview";
 import { SyncLogManager } from "./sync_log_manager";
-import { HttpApiService } from "./api";
+import { HttpApiService, ApiResponse } from "./api";
 import type FastSync from "../main";
 import { $ } from "../i18n/lang";
 
@@ -15,6 +15,9 @@ const MAX_DOWNLOAD_BUFFER_BYTES = 20 * 1024 * 1024
 
 // 上传中的文件追踪，用于删除时取消上传
 const activeUploadsMap = new Map<string, { cancelled: boolean }>()
+
+// 全局中止信号，用于插件卸载时
+export let isPluginUnloading = false;
 
 /**
  * 获取临时分片目录路径
@@ -49,10 +52,25 @@ export const clearAllTempChunks = async (plugin: FastSync) => {
   }
 }
 
-/**
- * 清理上传队列
- */
 export const clearUploadQueue = () => {
+}
+
+/**
+ * 中止所有进行中的文件操作 (插件卸载时调用)
+ */
+export const abortAllFileOperations = () => {
+  isPluginUnloading = true;
+  for (const upload of activeUploadsMap.values()) {
+    upload.cancelled = true;
+  }
+  dump("All file operations aborted.");
+}
+
+/**
+ * 重置文件操作状态 (插件加载时调用)
+ */
+export const resetFileOperations = () => {
+  isPluginUnloading = false;
 }
 
 export const BINARY_PREFIX_FILE_SYNC = "00"
@@ -360,7 +378,7 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
       try {
         const cpRaw = plugin.app.loadLocalStorage(checkpointKey)
         if (cpRaw) {
-          const cp = JSON.parse(cpRaw)
+          const cp = JSON.parse(cpRaw) as { sessionId?: string; lastChunkIndex?: number; contentHash?: string }
           if (cp.sessionId === data.sessionId &&
             cp.contentHash === contentHash &&
             typeof cp.lastChunkIndex === 'number' &&
@@ -417,7 +435,7 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
           BINARY_PREFIX_FILE_SYNC,
           () => {
             // before: 检查是否已被取消(例如由于文件在上传过程中被删除)
-            if (activeUploadsMap.get(data.path)?.cancelled) {
+            if (isPluginUnloading || activeUploadsMap.get(data.path)?.cancelled) {
               dump(`Upload aborted for ${data.path} (cancelled before send)`);
               return true; // 返回 true 表示应该取消发送
             }
@@ -457,7 +475,7 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
         )
 
         // 如果被取消,立即退出循环并释放槽位
-        if (cancelled) {
+        if (cancelled || isPluginUnloading) {
           // 取消时清除 checkpoint，避免使用已失效的会话
           // Clear checkpoint on cancel to avoid stale session reuse
           try { plugin.app.saveLocalStorage(checkpointKey, null) } catch { /* ignore */ }
@@ -484,12 +502,12 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
         }
 
         window.setTimeout(async () => {
+          if (isPluginUnloading) return;
           try {
             const apiService = new HttpApiService(plugin);
-            const res = await apiService.getFileInfo(file.path) as any;
+            const serverInfo = await apiService.getFileInfo(file.path);
 
-            if (res && res.status && res.data) {
-              const serverInfo = res.data;
+            if (serverInfo) {
               // 核对 path、size、mtime 是否一致
               if (serverInfo.path === file.path &&
                 serverInfo.size === file.stat.size &&
@@ -863,10 +881,10 @@ export const checkAndUploadAttachments = async function (plugin: FastSync) {
 
     checkedCount++;
     try {
-      const res = await apiService.getFileInfo(file.path) as any;
+      const res = await apiService.getFileInfo(file.path);
 
-      // 如果服务端返回状态为 false，或者没有数据，说明服务端不存在
-      if (!res || !res.status || !res.data) {
+      // 如果没有数据，说明服务端不存在
+      if (!res) {
         dump(`Cloud Preview: File missing on server, starting upload: ${file.path}`);
         await fileModify(file, plugin, false);
         uploadCount++;
@@ -888,10 +906,10 @@ export const checkAndUploadAttachments = async function (plugin: FastSync) {
  * 处理接收到的二进制文件分片
  */
 export const handleFileChunkDownload = async function (buf: ArrayBuffer | Blob, plugin: FastSync) {
-  if (plugin.settings.syncEnabled == false) return
-
+  if (plugin.settings.syncEnabled == false || isPluginUnloading) return
+  
   const binaryData = buf instanceof Blob ? await buf.arrayBuffer() : buf
-  if (binaryData.byteLength < 40) return
+  if (binaryData.byteLength < 40 || isPluginUnloading) return
 
   const sessionIdBytes = new Uint8Array(binaryData, 0, 36)
   const sessionId = new TextDecoder().decode(sessionIdBytes)

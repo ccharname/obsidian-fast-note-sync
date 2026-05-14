@@ -135,17 +135,23 @@ export class SyncLogManager {
      * @param data 消息数据
      * @param currentSyncType 当前同步类型
      */
-    public logReceivedMessage(action: string, data: any, currentSyncType: string): void {
+    public logReceivedMessage(action: string, data: unknown, currentSyncType: string): void {
         // 过滤不需要记录的消息类型
         const excludedActions = ["Pong", "Authorization", "ClientInfo", "FileUploadCheck", "FileChunkDownload", "NoteSyncNeedPush", "FileSyncUpdate", "FileSyncChunkDownload"];
         if (excludedActions.includes(action)) {
             return;
         }
 
+        const msgData = data as { 
+            data?: { Path?: string; path?: string; Vault?: string; vault?: string; sessionId?: string; SessionID?: string };
+            Path?: string; path?: string; Vault?: string; vault?: string; sessionId?: string; SessionID?: string;
+            code?: number; message?: string;
+        };
+
         // 提取路径信息
-        const logPath = data.data?.Path || data.Path || data.path || data.data?.path;
+        const logPath = msgData.data?.Path || msgData.Path || msgData.path || msgData.data?.path;
         // 提取 Vault 信息
-        const logVault = data.Vault || data.vault || data.data?.Vault || data.data?.vault;
+        const logVault = msgData.Vault || msgData.vault || msgData.data?.Vault || msgData.data?.vault;
 
         // 根据消息类型调整 action 名称
         let logAction = action;
@@ -155,12 +161,12 @@ export class SyncLogManager {
         }
 
         // 提取 sessionId
-        const sessionId = data.sessionId || data.data?.sessionId || data.data?.SessionID;
+        const sessionId = msgData.sessionId || msgData.data?.sessionId || msgData.data?.SessionID;
 
         if (sessionId) {
             // 根据 code 判断状态
-            const hasCode = data.code !== undefined;
-            const isError = hasCode && (data.code === 0 || data.code > 200);
+            const hasCode = msgData.code !== undefined;
+            const isError = hasCode && (msgData.code === 0 || (msgData.code as number) > 200);
 
             let targetStatus: LogStatus = 'pending';
             if (isError) {
@@ -181,12 +187,12 @@ export class SyncLogManager {
                 status: targetStatus,
                 path: logPath,
                 vault: logVault,
-                message: data.message || (data.code !== undefined ? `Code: ${data.code}` : undefined)
+                message: msgData.message || (msgData.code !== undefined ? `Code: ${msgData.code}` : undefined)
             });
         } else {
             // 没有 sessionId 的消息
-            const status = (data.code === 0 || data.code > 200) ? 'error' : 'success';
-            const message = data.message || (data.code !== undefined ? `Code: ${data.code}` : undefined);
+            const status = (msgData.code !== undefined && (msgData.code === 0 || (msgData.code as number) > 200)) ? 'error' : 'success';
+            const message = msgData.message || (msgData.code !== undefined ? `Code: ${msgData.code}` : undefined);
             this.addLog('receive', logAction, message, status, logPath, logVault);
         }
     }

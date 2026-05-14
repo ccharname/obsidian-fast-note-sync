@@ -147,7 +147,7 @@ export class PathSuggest extends AbstractInputSuggest<string> {
     this.inputEl.dispatchEvent(new Event("input", { bubbles: true }));
     this.inputEl.dispatchEvent(new Event("change", { bubbles: true }));
     this.inputEl.focus();
-    setTimeout(() => {
+    window.setTimeout(() => {
       this.close();
     }, 50);
   }
@@ -163,8 +163,8 @@ export class PathSuggest extends AbstractInputSuggest<string> {
     super.onKeyDown(event);
 
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      setTimeout(() => {
-        const activeItem = document.querySelector(".suggestion-item.mod-active");
+      window.setTimeout(() => {
+        const activeItem = activeDocument.querySelector(".suggestion-item.mod-active");
         if (activeItem) {
           const val = activeItem.textContent;
           if (val) {

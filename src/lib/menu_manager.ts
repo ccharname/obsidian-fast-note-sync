@@ -6,7 +6,8 @@ import { NoteHistoryModal } from '../views/note-history/history-modal';
 import { ShareModal } from '../views/share-modal';
 import { RecycleBinModal } from '../views/recycle-bin-modal';
 import { AboutModal } from '../views/about-modal';
-import { $ } from '../i18n/lang';
+import { $ } from "../i18n/lang";
+import { AppWithInternal, MenuItemWithDom } from "./types";
 import FastSync from '../main';
 
 
@@ -25,7 +26,7 @@ export class MenuManager {
   public concurrencyStatusBarItem: HTMLElement;
   private mobileStatusDot: HTMLElement | null = null;
   private mobileHeaderIconStatus: boolean = false;
-  private ribbonMutationTimer: ReturnType<typeof setTimeout> | null = null;
+  private ribbonMutationTimer: number | null = null;
 
   private statusBarText: HTMLElement;
   private statusBarFill: HTMLElement;
@@ -55,10 +56,10 @@ export class MenuManager {
     // When Obsidian re-orders ribbon via drag, it may clear innerHTML and re-apply the initially registered icon,
     // causing our dynamic state and badge to be lost. Self-repair immediately if expected icon or badge is missing.
     const observer = new MutationObserver(() => {
-      if (!this.ribbonIcon) return;
-      if (this.ribbonMutationTimer) clearTimeout(this.ribbonMutationTimer);
-
-      this.ribbonMutationTimer = setTimeout(() => {
+      if (this.ribbonIcon) {
+        if (this.ribbonMutationTimer) window.clearTimeout(this.ribbonMutationTimer);
+      }
+      this.ribbonMutationTimer = window.setTimeout(() => {
         const expectedIconId = Platform.isMobile ? "wifi" : (this.ribbonIconStatus ? "wifi" : "wifi-off");
         const hasCorrectIcon = this.ribbonIcon.querySelector(`.lucide-${expectedIconId}`);
         const hasBadge = this.badgeEl && this.badgeEl.parentElement === this.ribbonIcon;
@@ -138,10 +139,10 @@ export class MenuManager {
     // 初始化 回收站 状态栏入口
     this.recycleBinStatusBarItem = this.plugin.addStatusBarItem();
     this.recycleBinStatusBarItem.addClass("mod-clickable");
-    setIcon(this.recycleBinStatusBarItem, "lucide-archive-x");
+    setIcon(this.recycleBinStatusBarItem, "archive-x");
     this.recycleBinStatusBarItem.setAttribute("aria-label", $("ui.recycle_bin.title"));
     this.recycleBinStatusBarItem.addEventListener("click", () => {
-      new RecycleBinModal(this.plugin.app, this.plugin).open();
+      this.plugin.activateRecycleBinView();
     });
     
     this.refreshConcurrencyIndicator();
@@ -187,10 +188,11 @@ export class MenuManager {
       id: "open-settings",
       name: $("ui.menu.settings"),
       callback: () => {
-        const setting = (this.plugin.app as any).setting
-        if (setting.containerEl.parentElement !== null) {
+        const app = this.plugin.app as AppWithInternal;
+        const setting = app.setting;
+        if (setting && setting.containerEl && setting.containerEl.parentElement !== null) {
           setting.close()
-        } else {
+        } else if (setting) {
           setting.open()
           setting.openTabById(this.plugin.manifest.id)
         }
@@ -198,6 +200,7 @@ export class MenuManager {
       hotkeys: [{ modifiers: ["Ctrl", "Shift"], key: "S" }]
     })
   }
+
 
   updateRibbonIcon(status: boolean) {
     this.ribbonIconStatus = status;
@@ -257,7 +260,7 @@ export class MenuManager {
         this.mobileStatusDot.remove();
         this.mobileStatusDot = null;
       }
-      document.body.querySelectorAll(".fns-mobile-status-dot").forEach(el => el.remove());
+      activeDocument.body.querySelectorAll(".fns-mobile-status-dot").forEach(el => el.remove());
       this.updateMobileHeaderIcon(status);
       return;
     }
@@ -267,7 +270,7 @@ export class MenuManager {
 
     // 尝试寻找 DOM 中已经存在的点，防止重复创建 (Try to find existing dot in DOM to prevent duplicates)
     if (!this.mobileStatusDot) {
-      this.mobileStatusDot = document.body.querySelector(".fns-mobile-status-dot") as HTMLElement;
+      this.mobileStatusDot = activeDocument.body.querySelector(".fns-mobile-status-dot") as HTMLElement;
     }
 
     if (pos === 'hidden') {
@@ -276,17 +279,17 @@ export class MenuManager {
         this.mobileStatusDot = null;
       }
       // 确保彻底清理 DOM 中可能残留的其它的点 (Ensure thorough cleanup of any remaining dots in DOM)
-      document.body.querySelectorAll(".fns-mobile-status-dot").forEach(el => el.remove());
+      activeDocument.body.querySelectorAll(".fns-mobile-status-dot").forEach(el => el.remove());
       return;
     }
 
     if (!this.mobileStatusDot) {
-      this.mobileStatusDot = document.body.createDiv("fns-mobile-status-dot");
+      this.mobileStatusDot = activeDocument.body.createDiv("fns-mobile-status-dot");
     }
 
     // 检查是否有多个点存在（可能由于插件重载或意外情况产生），只保留一个
     // Check for multiple dots and keep only one
-    const allDots = document.body.querySelectorAll(".fns-mobile-status-dot");
+    const allDots = activeDocument.body.querySelectorAll(".fns-mobile-status-dot");
     if (allDots.length > 1) {
       allDots.forEach(el => {
         if (el !== this.mobileStatusDot) el.remove();
@@ -344,7 +347,7 @@ export class MenuManager {
    * Remove all injected FNS status icons from view-actions
    */
   cleanupMobileHeaderIcons() {
-    document.querySelectorAll('.fns-status-action').forEach(el => el.remove());
+    activeDocument.querySelectorAll('.fns-status-action').forEach(el => el.remove());
   }
 
   /**
@@ -364,7 +367,7 @@ export class MenuManager {
       this.mobileStatusDot = null;
     }
     // 确保彻底清理 DOM 中可能残留的其它的点 (Ensure thorough cleanup of any remaining dots in DOM)
-    document.body.querySelectorAll(".fns-mobile-status-dot").forEach(el => el.remove());
+    activeDocument.body.querySelectorAll(".fns-mobile-status-dot").forEach(el => el.remove());
     // 清理注入到 view-actions 中的图标 (Clean up icons injected into view-actions)
     this.cleanupMobileHeaderIcons();
   }
@@ -397,7 +400,7 @@ export class MenuManager {
       this.badgeEl.toggleClass("fns-hidden", ribbonShow === "none");
     }
     // 同步更新 view-actions 状态图标上的红点 / Sync badge on view-actions status icon
-    document.querySelectorAll('.fns-status-action .fns-ribbon-badge').forEach((el) => {
+    activeDocument.querySelectorAll('.fns-status-action .fns-ribbon-badge').forEach((el) => {
       (el as HTMLElement).toggleClass("fns-hidden", ribbonShow === "none");
     });
   }
@@ -503,7 +506,7 @@ export class MenuManager {
             this.plugin.websocket.unRegister(true);
             showSyncNotice($("ui.menu.disable_sync_desc"));
           });
-        (item as any).dom.setAttribute("aria-label", $("ui.menu.disable_sync_desc"));
+        (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", $("ui.menu.disable_sync_desc"));
       });
     } else {
       menu.addItem((item: MenuItem) => {
@@ -514,7 +517,7 @@ export class MenuManager {
             this.plugin.websocket.register();
             showSyncNotice($("ui.menu.enable_sync_desc"));
           });
-        (item as any).dom.setAttribute("aria-label", $("ui.menu.enable_sync_desc"));
+        (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", $("ui.menu.enable_sync_desc"));
       });
     }
     menu.addSeparator();
@@ -525,7 +528,7 @@ export class MenuManager {
         .onClick(async () => {
           startupSync(this.plugin);
         });
-      (item as any).dom.setAttribute("aria-label", $("ui.menu.default_sync_desc"));
+      (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", $("ui.menu.default_sync_desc"));
     });
     menu.addSeparator();
     menu.addItem((item: MenuItem) => {
@@ -535,7 +538,7 @@ export class MenuManager {
         .onClick(async () => {
           startupFullSync(this.plugin);
         });
-      (item as any).dom.setAttribute("aria-label", $("ui.menu.full_sync_desc"));
+      (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", $("ui.menu.full_sync_desc"));
     });
 
     menu.addSeparator();
@@ -546,7 +549,7 @@ export class MenuManager {
         .onClick(async () => {
           this.plugin.activateLogView();
         });
-      (item as any).dom.setAttribute("aria-label", $("ui.log.view_log"));
+      (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", $("ui.log.view_log"));
     });
 
     menu.addSeparator();
@@ -557,7 +560,7 @@ export class MenuManager {
         .onClick(async () => {
           new RecycleBinModal(this.plugin.app, this.plugin).open();
         });
-      (item as any).dom.setAttribute("aria-label", $("ui.recycle_bin.title"));
+      (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", $("ui.recycle_bin.title"));
     });
 
     // 分享中（X）菜单项，仅在有分享笔记或已连接时显示
@@ -580,7 +583,7 @@ export class MenuManager {
               this.plugin.app.workspace.revealLeaf(leaves[0]);
             }
           });
-        (item as any).dom.setAttribute("aria-label", $("ui.menu.sharing_desc"));
+        (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", $("ui.menu.sharing_desc"));
 
         // 异步获取分享列表并更新标题 / Async fetch share list and update title
         if (this.plugin.websocket.isAuth) {
@@ -603,7 +606,7 @@ export class MenuManager {
           const { WSClientsModal } = await import("../views/ws-clients-modal");
           new WSClientsModal(this.plugin.app, this.plugin).open();
         });
-      (item as any).dom.setAttribute("aria-label", $("ui.system.websocketClients"));
+      (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", $("ui.system.websocketClients"));
       
       // 异步获取在线客户端数量并更新菜单项
       this.plugin.api.getWSClients().then(clients => {
@@ -620,10 +623,10 @@ export class MenuManager {
         .setIcon("settings")
         .setTitle($("ui.menu.settings"))
         .onClick(async () => {
-          (this.plugin.app as any).setting.open();
-          (this.plugin.app as any).setting.openTabById(this.plugin.manifest.id);
+          (this.plugin.app as AppWithInternal).setting?.open();
+          (this.plugin.app as AppWithInternal).setting?.openTabById(this.plugin.manifest.id);
         });
-      (item as any).dom.setAttribute("aria-label", $("ui.menu.settings"));
+      (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", $("ui.menu.settings"));
     });
 
     const showVersion = this.plugin.settings.showVersionInfo;
@@ -649,9 +652,9 @@ export class MenuManager {
 
         if (pluginNew) {
           const ariaLabel = $("ui.status.new_version", { version: this.plugin.localStorageManager.getMetadata("pluginVersionNewName") || "" });
-          (item as any).dom.setAttribute("aria-label", ariaLabel);
+          (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", ariaLabel);
 
-          const itemDom = (item as any).dom as HTMLElement;
+          const itemDom = (item as unknown as MenuItemWithDom).dom;
           const titleEl = itemDom.querySelector(".menu-item-title");
           if (titleEl) {
             const iconSpan = titleEl.createSpan({ cls: "fast-note-sync-update-icon fns-update-icon" });
@@ -661,7 +664,7 @@ export class MenuManager {
             titleEl.createSpan({ cls: "fns-menu-badge" });
           }
         } else {
-          (item as any).dom.setAttribute("aria-label", $("ui.menu.plugin_desc"));
+          (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", $("ui.menu.plugin_desc"));
         }
       });
     }
@@ -682,9 +685,9 @@ export class MenuManager {
 
         if (serverNew) {
           const ariaLabel = $("ui.status.new_version", { version: this.plugin.localStorageManager.getMetadata("serverVersionNewName") || "" });
-          (item as any).dom.setAttribute("aria-label", ariaLabel);
+          (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", ariaLabel);
 
-          const itemDom = (item as any).dom as HTMLElement;
+          const itemDom = (item as unknown as MenuItemWithDom).dom;
           const titleEl = itemDom.querySelector(".menu-item-title");
           if (titleEl) {
             const iconSpan = titleEl.createSpan({ cls: "fast-note-sync-update-icon fns-update-icon fns-update-icon-sm" });
@@ -694,7 +697,7 @@ export class MenuManager {
             titleEl.createSpan({ cls: "fns-menu-badge" });
           }
         } else {
-          (item as any).dom.setAttribute("aria-label", $("ui.menu.server_desc"));
+          (item as unknown as MenuItemWithDom).dom.setAttribute("aria-label", $("ui.menu.server_desc"));
         }
       });
     }

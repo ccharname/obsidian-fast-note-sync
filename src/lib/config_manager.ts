@@ -44,7 +44,7 @@ export class ConfigManager {
         if (stat && stat.type === "file") {
           this.fileStates.set(fullPath, stat.mtime)
         }
-      } catch (e) {
+      } catch {
         // 忽略读取不到的单个文件
       }
     }
@@ -111,12 +111,12 @@ export class ConfigManager {
 
       // 2. 特殊处理本插件的 manifest.json 更新 (本地修改场景)
       if (fileName === "manifest.json" && relativePath === `${this.pluginDir}/manifest.json`) {
-        setTimeout(async () => {
+        window.setTimeout(async () => {
           try {
             const content = await this.plugin.app.vault.adapter.read(path)
-            const manifest = JSON.parse(content)
+            const manifest = JSON.parse(content) as { version?: string }
             if (manifest.version && manifest.version !== this.plugin.manifest.version) {
-              this.plugin.manifest.version = manifest.version
+              (this.plugin.manifest as { version: string }).version = manifest.version
               dump(`[FastNoteSync] Local manifest updated to ${this.plugin.manifest.version}`)
             }
           } catch (e) {
@@ -133,10 +133,10 @@ export class ConfigManager {
     try {
       const filePath = normalizePath(`${this.plugin.app.vault.configDir}/community-plugins.json`)
       if (await this.plugin.app.vault.adapter.exists(filePath)) {
-        const plugins = JSON.parse(await this.plugin.app.vault.adapter.read(filePath))
+        const plugins = JSON.parse(await this.plugin.app.vault.adapter.read(filePath)) as string[]
         if (Array.isArray(plugins)) this.enabledPlugins = new Set(plugins)
       }
-    } catch (e) { }
+    } catch { }
   }
 
   private async checkFileChange(filePath: string, eventEnter: boolean = false, isFolder: boolean = false) {
@@ -184,7 +184,7 @@ export class ConfigManager {
         configModify(relativePath, this.plugin, eventEnter)
         dump("Config Modify", relativePath)
       }
-    } catch (e) { }
+    } catch { }
   }
 
   public updateFileState(filePath: string, mtime: number) {

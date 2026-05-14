@@ -59,7 +59,7 @@ export default {
   "setting.sync.binary_limit": "Attachment Sync Size Limit",
   "setting.sync.binary_limit_desc": "When enabled, attachments larger than 128MB will not be synced to reduce the risk of mobile OOM errors. When disabled, there is no size limit.",
   "setting.sync.auto_config": "Auto Sync Config",
-  "setting.sync.auto_config_desc": "When enabled, core configurations, plugins, appearance, themes, and other settings under the <b>.obsidian</b> directory will be synced. Upon first enablement, server-side configurations will overwrite local ones.",
+  "setting.sync.auto_config_desc": "When enabled, core configurations, plugins, appearance, themes, and other settings under the <b>${configDir}</b> directory will be synced. Upon first enablement, server-side configurations will overwrite local ones.",
   "setting.sync.pdf_state": "PDF State Sync",
   "setting.sync.pdf_state_desc": "When enabled, the reading state of the PDF viewer will be synced. (This setting requires Config Sync to be enabled)",
   "setting.sync.merge_strategy": "Offline Note Edit Merge Strategy",
@@ -80,7 +80,7 @@ export default {
 
   "setting.sync.exclude": "Sync Exclusion (Notes/Attachments/Config)",
   "setting.sync.exclude_placeholder": "Path or regex, one per line",
-  "setting.sync.exclude_desc": "Notes, attachments, directories, or **.obsidian** config files matching the rules will not participate in sync.\n\n**Rule Description:**\n- Supports `path prefix` (e.g., folder path) or `regular expression`.\n- Each line represents an independent rule.\n- Click the **Aa** button on the right to toggle case sensitivity (strict matching when enabled).\n\n**Examples:**\n\n| Rule | Match Result |\n| --- | --- |\n| `Folder1/abc.md` | Exact match for this file |\n| `Folder1` | Matches Folder1 directory and all its contents |\n| `.obsidian/plugins/` | Excludes the config directory of a specific plugin |\n| `.*\\.tmp$` | Regex matches all files ending with .tmp |",
+  "setting.sync.exclude_desc": "Notes, attachments, directories, or **${configDir}** config files matching the rules will not participate in sync.\n\n**Rule Description:**\n- Supports `path prefix` (e.g., folder path) or `regular expression`.\n- Each line represents an independent rule.\n- Click the **Aa** button on the right to toggle case sensitivity (strict matching when enabled).\n\n**Examples:**\n\n| Rule | Match Result |\n| --- | --- |\n| `Folder1/abc.md` | Exact match for this file |\n| `Folder1` | Matches Folder1 directory and all its contents |\n| `${configDir}/plugins/` | Excludes the config directory of a specific plugin |\n| `.*\\.tmp$` | Regex matches all files ending with .tmp |",
   "setting.sync.exclude_extensions": "Sync Extension Exclusion",
   "setting.sync.exclude_extensions_placeholder": "Enter extensions, e.g., .tmp or .log",
   "setting.sync.exclude_extensions_desc": "Files with the listed extensions will not participate in sync. One per line, recommended to start with `.`.\nFor example: `.tmp`, `.bak`.",

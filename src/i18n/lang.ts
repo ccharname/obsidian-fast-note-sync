@@ -60,8 +60,9 @@ export const localeMap: { [k: string]: Partial<typeof en> } = {
 
 // Use a string variable first to avoid computed property name resolution warnings
 // 先用字符串变量缓存，避免静态分析无法解析计算属性名
-const _localeKey: string = (moment as any).locale ? (moment as any).locale() : "en";
-const locale = localeMap[_localeKey] as Partial<LangMap> | undefined;
+const _moment = moment as unknown as { locale?: () => string };
+const _localeKey = typeof _moment.locale === 'function' ? _moment.locale() : "en";
+const locale = (localeMap as Record<string, Partial<typeof en>>)[_localeKey] as Partial<LangMap> | undefined;
 
 
 function getValueFromPath(root: Record<string, unknown>, path: string): unknown {

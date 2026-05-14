@@ -40,7 +40,68 @@ export interface UserDTO {
     updatedAt: string;
 }
 
-export interface ApiResponse<T = any> {
+export interface Pager {
+    page: number;
+    pageSize: number;
+    totalRows: number;
+    totalPages: number;
+}
+
+export interface NoteListResponse {
+    list: {
+        id: number;
+        path: string;
+        pathHash: string;
+        size: number;
+        mtime: number;
+        updatedAt: string;
+    }[];
+    pager: Pager;
+}
+
+export interface FileListResponse {
+    list: {
+        id: number;
+        path: string;
+        pathHash: string;
+        size: number;
+        mtime: number;
+        updatedAt: string;
+    }[];
+    pager: Pager;
+}
+
+export interface WSClient {
+    uid: number | string;
+    username?: string;
+    nickname?: string;
+    client?: string;
+    clientName: string;
+    clientVersion: string;
+    clientType?: string;
+    ip?: string;
+    remoteAddr?: string;
+    connectedAt?: string;
+    startTime?: string | number;
+    traceId?: string;
+    platformInfo?: {
+        isMobile: boolean;
+        platform: string;
+    };
+}
+
+export interface FileInfoResponse {
+    id: number;
+    path: string;
+    pathHash: string;
+    size: number;
+    mtime: number;
+    contentHash: string;
+    isRecycle: boolean;
+    updatedAt: string;
+}
+
+export interface ApiResponse<T = unknown> {
     code: number;
     message?: string;
     data: T;
@@ -81,7 +142,7 @@ export class HttpApiService {
                     this.plugin.updateRuntimeApi(base);
                 }
                 return isOk;
-            } catch (e) {
+            } catch {
                 this.plugin.updateRuntimeApi(base);
                 return false;
             }
@@ -108,9 +169,9 @@ export class HttpApiService {
 
             // 进一步校验业务状态码 (若返回的是 JSON)
             try {
-                const json = await res.clone().json();
+                const json = (await res.clone().json()) as ApiResponse<unknown>;
                 return (res.ok || res.status === 404) && (res.status === 404 || this.isSuccess(json));
-            } catch (e) {
+            } catch {
                 // 如果不是 JSON，回退到 HTTP 状态码判断
                 return res.ok || res.status === 404;
             }
@@ -143,11 +204,12 @@ export class HttpApiService {
      * 检查当前用户是否具有管理员权限
      * GET /api/admin/check
      */
-    async checkAdmin(): Promise<boolean> {
+    async checkAdmin(signal?: AbortSignal): Promise<boolean> {
         const endpoint = `/api/admin/check`;
         try {
             const { status, json } = await this.request(endpoint, {
-                method: "GET"
+                method: "GET",
+                signal
             });
             // 根据用户提供的结构，isAdmin 位于 data 中
             const res = json as ApiResponse<{ isAdmin: boolean }>;
@@ -162,11 +224,11 @@ export class HttpApiService {
      * 简单的健康检查探测
      * 用于升级后的轮询
      */
-    async checkHealth(): Promise<boolean> {
+    async checkHealth(signal?: AbortSignal): Promise<boolean> {
         try {
-            const { status } = await this.request("/api/health", { method: "GET" });
+            const { status } = await this.request("/api/health", { method: "GET", signal });
             return (status >= 200 && status < 300) || status === 404;
-        } catch (e) {
+        } catch {
             return false;
         }
     }
@@ -195,7 +257,7 @@ export class HttpApiService {
      * @param endpoint 接口相对路径（如 /api/notes，不包含主机名）
      * @param options 请求选项
      */
-    private async request(endpoint: string, options: { method: string, headers?: Record<string, string>, body?: string }): Promise<{ status: number, json: unknown, finalUrl: string }> {
+    private async request(endpoint: string, options: { method: string, headers?: Record<string, string>, body?: string, signal?: AbortSignal }): Promise<{ status: number, json: unknown, finalUrl: string }> {
         const networkLibrary = this.plugin.settings.networkLibrary;
         // 使用 runApi 作为基准
         const base = (this.plugin.runApi || this.plugin.settings.api).replace(/\/+$/, "");
@@ -206,7 +268,7 @@ export class HttpApiService {
             ...options.headers,
             "x-client": "ObsidianPlugin",
             "x-client-name": encodeURIComponent(this.plugin.getClientName()),
-            "x-client-version": this.plugin.manifest.version || ""
+            "x-client-version": (this.plugin.manifest as { version?: string }).version || ""
         };
 
         if (this.plugin.settings.apiToken) {
@@ -219,6 +281,8 @@ export class HttpApiService {
 
         if (networkLibrary === 'requestUrl') {
             try {
+                // Obsidian's requestUrl doesn't natively support AbortSignal in older versions, 
+                // but we check for it to be future-proof or just let it run.
                 const response = await requestUrl({
                     url: url,
                     method: options.method,
@@ -229,8 +293,8 @@ export class HttpApiService {
 
                 return {
                     status: response.status,
-                    json: response.json,
-                    finalUrl: (response as any).url || url
+                    json: response.json as unknown,
+                    finalUrl: (response as unknown as { url?: string }).url || url
                 };
             } catch (e) {
                 throw e;
@@ -240,7 +304,8 @@ export class HttpApiService {
                 method: options.method,
                 headers: headers,
                 body: options.body,
-                redirect: "follow"
+                redirect: "follow",
+                signal: options.signal
             };
 
             const res = await fetch(url, fetchOptions);
@@ -327,7 +392,7 @@ export class HttpApiService {
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 const msg = res?.message || "Failed to fetch history detail";
                 showSyncNotice(msg);
                 throw new Error(msg);
@@ -356,7 +421,7 @@ export class HttpApiService {
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 const msg = res?.message || "Failed to restore note version";
                 showSyncNotice(msg);
                 return false;
@@ -374,7 +439,7 @@ export class HttpApiService {
      * 获取服务端文件信息
      * 用于在删除本地文件前核对状态
      */
-    async getFileInfo(path: string): Promise<unknown> {
+    async getFileInfo(path: string): Promise<FileInfoResponse> {
         const params = new URLSearchParams({
             vault: this.plugin.settings.vault,
             path: path,
@@ -390,11 +455,12 @@ export class HttpApiService {
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 throw new Error(res?.message || `HTTP ${status}: Failed to fetch file info`);
             }
 
-            return json;
+            const res = json as ApiResponse<FileInfoResponse>;
+            return res.data;
         } catch (e) {
             throw e;
         }
@@ -403,7 +469,7 @@ export class HttpApiService {
     /**
      * 获取笔记列表（支持回收站模式）
      */
-    async getNoteList(page = 1, pageSize = 20, isRecycle = false, keyword = ""): Promise<NoteListResponse> {
+    async getNoteList(page = 1, pageSize = 20, isRecycle = false, keyword = "", signal?: AbortSignal): Promise<NoteListResponse> {
         const params = new URLSearchParams({
             vault: this.plugin.settings.vault,
             page: page.toString(),
@@ -419,7 +485,8 @@ export class HttpApiService {
 
         try {
             const { status, json } = await this.request(endpoint, {
-                method: "GET"
+                method: "GET",
+                signal
             });
 
             if (status !== 200) {
@@ -440,7 +507,7 @@ export class HttpApiService {
     /**
      * 获取文件列表（支持回收站模式）
      */
-    async getFileList(page = 1, pageSize = 20, isRecycle = false, keyword = ""): Promise<FileListResponse> {
+    async getFileList(page = 1, pageSize = 20, isRecycle = false, keyword = "", signal?: AbortSignal): Promise<FileListResponse> {
         const params = new URLSearchParams({
             vault: this.plugin.settings.vault,
             page: page.toString(),
@@ -456,7 +523,8 @@ export class HttpApiService {
 
         try {
             const { status, json } = await this.request(endpoint, {
-                method: "GET"
+                method: "GET",
+                signal
             });
 
             if (status !== 200) {
@@ -477,7 +545,7 @@ export class HttpApiService {
     /**
      * 恢复已删除的笔记
      */
-    async restoreNote(path: string, pathHash?: string): Promise<boolean> {
+    async restoreNote(path: string, pathHash?: string, signal?: AbortSignal): Promise<boolean> {
         const endpoint = `/api/note/restore`;
         try {
             const { status, json } = await this.request(endpoint, {
@@ -486,11 +554,12 @@ export class HttpApiService {
                     path: path,
                     pathHash: pathHash,
                     vault: this.plugin.settings.vault
-                })
+                }),
+                signal
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 const msg = res?.message || "Failed to restore note";
                 showSyncNotice(msg);
                 return false;
@@ -506,7 +575,7 @@ export class HttpApiService {
     /**
      * 恢复已删除的文件
      */
-    async restoreFile(path: string, pathHash?: string): Promise<boolean> {
+    async restoreFile(path: string, pathHash?: string, signal?: AbortSignal): Promise<boolean> {
         const endpoint = `/api/file/restore`;
         try {
             const { status, json } = await this.request(endpoint, {
@@ -515,11 +584,12 @@ export class HttpApiService {
                     path: path,
                     pathHash: pathHash,
                     vault: this.plugin.settings.vault
-                })
+                }),
+                signal
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 const msg = res?.message || "Failed to restore file";
                 showSyncNotice(msg);
                 return false;
@@ -548,7 +618,7 @@ export class HttpApiService {
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 const msg = res?.message || "Failed to delete file";
                 showSyncNotice(msg);
                 return false;
@@ -564,7 +634,7 @@ export class HttpApiService {
     /**
      * 清除回收站内容（支持批量和一键清空）
      */
-    async clearRecycleBin(type: 'note' | 'file', path?: string, pathHash?: string): Promise<boolean> {
+    async clearRecycleBin(type: 'note' | 'file', path?: string, pathHash?: string, signal?: AbortSignal): Promise<boolean> {
         const endpoint = type === 'note' ? '/api/note/recycle-clear' : '/api/file/recycle-clear';
 
         try {
@@ -574,11 +644,12 @@ export class HttpApiService {
                     vault: this.plugin.settings.vault,
                     path: path || "",
                     pathHash: pathHash || ""
-                })
+                }),
+                signal
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 const msg = res?.message || (path ? "永久删除失败" : "清空回收站失败");
                 showSyncNotice(msg);
                 return false;
@@ -607,7 +678,7 @@ export class HttpApiService {
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 const msg = res?.message || "Failed to create share";
                 showSyncNotice(msg);
                 return null;
@@ -664,7 +735,7 @@ export class HttpApiService {
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 const msg = res?.message || "Failed to update password";
                 showSyncNotice(msg);
                 return false;
@@ -696,7 +767,7 @@ export class HttpApiService {
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 const msg = res?.message || "Failed to create short link";
                 showSyncNotice(msg);
                 return null;
@@ -727,7 +798,7 @@ export class HttpApiService {
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 const msg = res?.message || "Failed to cancel share";
                 showSyncNotice(msg);
                 return false;
@@ -772,7 +843,7 @@ export class HttpApiService {
             });
 
             if (status !== 200 || !this.isSuccess(json)) {
-                const res = json as ApiResponse;
+                const res = json as ApiResponse<unknown>;
                 throw new Error(res?.message || "Failed to fetch user info");
             }
 
@@ -786,7 +857,7 @@ export class HttpApiService {
     /**
      * 获取在线客户端列表
      */
-    async getWSClients(): Promise<unknown[]> {
+    async getWSClients(): Promise<WSClient[]> {
         const endpoint = `/api/admin/ws_clients`;
         try {
             const { status, json } = await this.request(endpoint, {
@@ -796,7 +867,7 @@ export class HttpApiService {
             if (status !== 200 || !this.isSuccess(json)) {
                 return [];
             }
-            const res = json as ApiResponse<unknown[]>;
+            const res = json as ApiResponse<WSClient[]>;
             return res.data || [];
         } catch (e) {
             console.error("getWSClients error:", e);
@@ -808,22 +879,3 @@ export class HttpApiService {
 /**
  * 扩展 API 服务类以支持回收站功能
  */
-export interface NoteListResponse {
-    list: unknown[];
-    pager: {
-        page: number;
-        pageSize: number;
-        totalRows: number;
-        totalPages: number;
-    };
-}
-
-export interface FileListResponse {
-    list: unknown[];
-    pager: {
-        page: number;
-        pageSize: number;
-        totalRows: number;
-        totalPages: number;
-    };
-}

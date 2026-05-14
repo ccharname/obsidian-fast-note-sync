@@ -59,7 +59,7 @@ export default {
   "setting.sync.binary_limit": "附件同步大小限制",
   "setting.sync.binary_limit_desc": "开启后，将不再同步大于 128MB 的附件，以降低移动端 OOM 风险。关闭后则不限制大小。",
   "setting.sync.auto_config": "配置自动同步",
-  "setting.sync.auto_config_desc": "开启后，将同步 <b>.obsidian</b> 目录下的核心配置、插件、外观、主题等配置，首次开启将会使用服务端配置覆盖本地配置。",
+  "setting.sync.auto_config_desc": "开启后，将同步 <b>${configDir}</b> 目录下的核心配置、插件、外观、主题等配置，首次开启将会使用服务端配置覆盖本地配置。",
   "setting.sync.pdf_state": "PDF 状态同步",
   "setting.sync.pdf_state_desc": "开启后，将同步 PDF 查看器的阅读状态。 (本设置需要开启配置项同步)",
   "setting.sync.merge_strategy": "笔记离线编辑合并策略",
@@ -80,7 +80,7 @@ export default {
 
   "setting.sync.exclude": "同步排除 (笔记/附件/配置)",
   "setting.sync.exclude_placeholder": "路径或正则，每行一个",
-  "setting.sync.exclude_desc": "符合规则的笔记、附件、目录或 **.obsidian** 配置文件将不会参与同步。\n\n**规则说明：**\n- 支持 `路径前缀`（如文件夹路径）或 `正则表达式`。\n- 每一行代表一条独立规则。\n- 点击右侧的 **Aa** 按钮切换大小写敏感（开启时严格匹配大小写）。\n\n**示例：**\n\n| 规则 | 匹配结果 |\n| --- | --- |\n| `Folder1/abc.md` | 精确匹配该文件 |\n| `Folder1` | 匹配 Folder1 目录及其所有内容 |\n| `.obsidian/plugins/` | 排除特定插件的配置目录 |\n| `.*\\.tmp$` | 正则匹配所有以 .tmp 结尾的文件 |",
+  "setting.sync.exclude_desc": "符合规则的笔记、附件、目录或 **${configDir}** 配置文件将不会参与同步。\n\n**规则说明：**\n- 支持 `路径前缀`（如文件夹路径）或 `正则表达式`。\n- 每一行代表一条独立规则。\n- 点击右侧的 **Aa** 按钮切换大小写敏感（开启时严格匹配大小写）。\n\n**示例：**\n\n| 规则 | 匹配结果 |\n| --- | --- |\n| `Folder1/abc.md` | 精确匹配该文件 |\n| `Folder1` | 匹配 Folder1 目录及其所有内容 |\n| `${configDir}/plugins/` | 排除特定插件的配置目录 |\n| `.*\\.tmp$` | 正则匹配所有以 .tmp 结尾的文件 |",
   "setting.sync.exclude_extensions": "同步后缀名排除",
   "setting.sync.exclude_extensions_placeholder": "输入后缀名，如 .tmp 或 .log",
   "setting.sync.exclude_extensions_desc": "符合所列后缀的文件将不参与同步。每行一个，建议以 `.` 开头。\n例如：`.tmp`、`.bak`。",

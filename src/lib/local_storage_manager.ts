@@ -21,7 +21,7 @@ export class LocalStorageManager {
      * 底层读原子操作
      */
     private read(key: string): string | null {
-        return this.plugin.app.loadLocalStorage(key);
+        return this.plugin.app.loadLocalStorage(key) as string | null;
     }
     
 

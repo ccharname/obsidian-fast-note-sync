@@ -1,6 +1,6 @@
 import { TFolder, TFile, normalizePath } from "obsidian";
 
-import { receiveFileUpload, receiveFileSyncUpdate, receiveFileSyncDelete, receiveFileSyncMtime, receiveFileSyncChunkDownload, receiveFileSyncEnd, checkAndUploadAttachments, receiveFileSyncRename, receiveFileRenameAck, receiveFileUploadAck, receiveFileDeleteAck } from "./file_operator";
+import { receiveFileUpload, receiveFileSyncUpdate, receiveFileSyncDelete, receiveFileSyncMtime, receiveFileSyncChunkDownload, receiveFileSyncEnd, checkAndUploadAttachments, receiveFileSyncRename, receiveFileRenameAck, receiveFileUploadAck, receiveFileDeleteAck, isPluginUnloading } from "./file_operator";
 import { hashContent, hashContentAsync, dump, isPathExcluded, configIsPathExcluded, getConfigSyncCustomDirs, generateUUID, showSyncNotice, isLargeBinarySyncRisk, describeBinarySyncLimit, logMemorySnapshot, hashFileAsync, formatFileSize } from "./helps";
 import { receiveConfigSyncModify, receiveConfigUpload, receiveConfigSyncMtime, receiveConfigSyncDelete, receiveConfigSyncEnd, configAllPaths, receiveConfigSyncClear, receiveConfigModifyAck, receiveConfigDeleteAck } from "./config_operator";
 import { receiveNoteSyncModify, receiveNoteUpload, receiveNoteSyncMtime, receiveNoteSyncDelete, receiveNoteSyncEnd, receiveNoteSyncRename, receiveNoteModifyAck, receiveNoteRenameAck, receiveNoteDeleteAck } from "./note_operator";
@@ -39,7 +39,7 @@ export const clearAllHashes = async (plugin: FastSync) => {
 /**
  * 检查同步是否完成
  */
-export function checkSyncCompletion(plugin: FastSync, intervalId?: ReturnType<typeof setTimeout>, syncStartTime?: number) {
+export function checkSyncCompletion(plugin: FastSync, intervalId?: number | any, syncStartTime?: number) {
   // 超时保底：如果同步超过 60 秒仍未完成，强制结束并恢复 watch，防止因任务计数异常导致永远无法发送
   // Safety timeout: if sync exceeds 60s, force completion and re-enable watch to prevent permanent send blockage
   const SYNC_TIMEOUT_MS = 60000;
@@ -208,9 +208,9 @@ export const receiveOperators: Map<string, ReceiveOperator> = new Map([
   ["NoteSyncMtime", receiveNoteSyncMtime as ReceiveOperator],
   ["NoteSyncDelete", receiveNoteSyncDelete as ReceiveOperator],
   ["NoteSyncRename", receiveNoteSyncRename as ReceiveOperator],
-  ["NoteModifyAck", (data, plugin) => receiveNoteModifyAck(data as any, plugin)],
-  ["NoteRenameAck", (data, plugin) => receiveNoteRenameAck(data as any, plugin)],
-  ["NoteDeleteAck", (data, plugin) => receiveNoteDeleteAck(data as any, plugin)],
+  ["NoteModifyAck", (data, plugin) => receiveNoteModifyAck(data as { path?: string; lastTime?: number }, plugin)],
+  ["NoteRenameAck", (data, plugin) => receiveNoteRenameAck(data as { oldPath?: string; newPath?: string; lastTime?: number }, plugin)],
+  ["NoteDeleteAck", (data, plugin) => receiveNoteDeleteAck(data as { path?: string; lastTime?: number }, plugin)],
   ["NoteSyncEnd", (data, plugin) => receiveSyncEndWrapper(data, plugin, "note")],
   ["FileUpload", receiveFileUpload as ReceiveOperator],
   ["FileSyncUpdate", receiveFileSyncUpdate as ReceiveOperator],
@@ -221,7 +221,7 @@ export const receiveOperators: Map<string, ReceiveOperator> = new Map([
   ["FileSyncEnd", (data, plugin) => receiveSyncEndWrapper(data, plugin, "file")],
   ["FileRenameAck", receiveFileRenameAck as ReceiveOperator],
   ["FileUploadAck", receiveFileUploadAck as ReceiveOperator],
-  ["FileDeleteAck", (data, plugin) => receiveFileDeleteAck(data as any, plugin)],
+  ["FileDeleteAck", (data, plugin) => receiveFileDeleteAck(data as { path?: string; lastTime?: number }, plugin)],
   ["SettingSyncModify", receiveConfigSyncModify as ReceiveOperator],
   ["SettingSyncNeedUpload", receiveConfigUpload as ReceiveOperator],
   ["SettingSyncMtime", receiveConfigSyncMtime as ReceiveOperator],
@@ -274,7 +274,8 @@ async function receiveSyncEndWrapper(data: unknown, plugin: FastSync, type: "not
     plugin.localStorageManager.clearPending('pendingNoteModifies')
     // 同步结束，提交扫描阶段计算出的哈希 (Commit hashes calculated during scan)
     for (const [path, cache] of plugin.scannedNoteHashes) {
-      const existing = (plugin.fileHashManager as any).hashMap.get(path)
+      const hashMap = (plugin.fileHashManager as unknown as { hashMap: Map<string, { mtime: number }> }).hashMap;
+      const existing = hashMap.get(path)
       if (!existing || existing.mtime <= cache.mtime) {
         plugin.fileHashManager.setFileHash(path, cache.hash, cache.mtime, cache.size)
       }
@@ -289,7 +290,8 @@ async function receiveSyncEndWrapper(data: unknown, plugin: FastSync, type: "not
     plugin.localStorageManager.clearPending('pendingUploadHashes')
     // 同步结束，提交扫描阶段计算出的哈希 (Commit hashes calculated during scan)
     for (const [path, cache] of plugin.scannedFileHashes) {
-      const existing = (plugin.fileHashManager as any).hashMap.get(path)
+      const hashMap = (plugin.fileHashManager as unknown as { hashMap: Map<string, { mtime: number }> }).hashMap;
+      const existing = hashMap.get(path)
       if (!existing || existing.mtime <= cache.mtime) {
         plugin.fileHashManager.setFileHash(path, cache.hash, cache.mtime, cache.size)
       }
@@ -305,7 +307,11 @@ async function receiveSyncEndWrapper(data: unknown, plugin: FastSync, type: "not
       await plugin.configHashManager.setFileHashes(plugin.pendingConfigModifies, async (path) => {
         const isVirtual = path.startsWith(plugin.localStorageManager.syncPathPrefix)
         if (isVirtual) return { mtime: Date.now(), size: plugin.localStorageManager.getItemValue(plugin.localStorageManager.pathToKey(path) || "")?.length || 0 }
-        return await plugin.app.vault.adapter.stat(normalizePath(path))
+        try {
+          return await plugin.app.vault.adapter.stat(normalizePath(path))
+        } catch (e) {
+          return null
+        }
       })
     }
     plugin.pendingDeleteConfigPaths.clear()
@@ -313,7 +319,8 @@ async function receiveSyncEndWrapper(data: unknown, plugin: FastSync, type: "not
     plugin.localStorageManager.clearPending('pendingConfigModifies')
     // 同步结束，提交扫描阶段计算出的哈希 (Commit hashes calculated during scan)
     for (const [path, cache] of plugin.scannedConfigHashes) {
-      const existing = (plugin.configHashManager as any).hashMap.get(path)
+      const hashMap = (plugin.configHashManager as unknown as { hashMap: Map<string, { mtime: number }> }).hashMap;
+      const existing = hashMap.get(path)
       if (!existing || existing.mtime <= cache.mtime) {
         plugin.configHashManager.setFileHash(path, cache.hash, cache.mtime, cache.size)
       }
@@ -474,6 +481,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
         // 每处理 20 个文件让出一次主线程，防止 UI 卡死 (已将 100 优化为 20)
         if (++processedCount % 20 === 0) {
           await sleep(0);
+          if (isPluginUnloading) return;
           // 更新扫描进度
           SyncLogManager.getInstance().addOrUpdateLog({
             id: hashingLogId,
@@ -601,7 +609,8 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
           }
         } catch (e) {
           // 单个文件处理失败不应中断整个同步流程
-          console.warn(`[FastNoteSync] 跳过异常文件 ${file.path}: ${e.message}`);
+          const errorMsg = e instanceof Error ? e.message : String(e);
+          console.warn(`[FastNoteSync] 跳过异常文件 ${file.path}: ${errorMsg}`);
           dump(`Error processing file ${file.path}:`, e);
         }
       }
@@ -683,6 +692,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
     for (const path of configPaths) {
       if (++configCount % 20 === 0) { // 已将 50 优化为 20
         await sleep(0);
+        if (isPluginUnloading) return;
         SyncLogManager.getInstance().addOrUpdateLog({
           id: hashingLogId,
           type: 'info',
@@ -739,7 +749,8 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
           size: stat.size
         });
       } catch (e) {
-        console.warn(`[FastNoteSync] 跳过异常配置文件 ${path}: ${e.message}`);
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        console.warn(`[FastNoteSync] 跳过异常配置文件 ${path}: ${errorMsg}`);
         dump(`Error processing config file ${path}:`, e);
       }
     }
@@ -835,7 +846,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
     // 同时记录开始时间，用于超时保底
     const syncStartTime = Date.now();
     const progressCheckInterval = window.setInterval(() => {
-      checkSyncCompletion(plugin, progressCheckInterval as any, syncStartTime);
+      checkSyncCompletion(plugin, progressCheckInterval, syncStartTime);
     }, 100);
   } finally {
     // 确保 isSyncing 在所有退出路径（正常完成、early return、异常）下都被重置

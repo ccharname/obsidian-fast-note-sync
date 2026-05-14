@@ -42,9 +42,14 @@ class SimpleEventBus {
  * 嵌入元素预览处理器
  * 处理本地不存在但云端存在的附件预览
  */
+interface PDFPageProxy {
+  getViewport(options: { scale: number }): { width: number, height: number };
+  render(options: { canvasContext: CanvasRenderingContext2D | null, viewport: any }): { promise: Promise<void> };
+}
+
 interface PDFDocumentProxy {
   numPages: number;
-  getPage(pageNumber: number): Promise<any>;
+  getPage(pageNumber: number): Promise<PDFPageProxy>;
 }
 
 export class FileCloudPreview {
@@ -401,7 +406,8 @@ export class FileCloudPreview {
         }
       } catch (e) {
         console.error("PDF Render Error", e);
-        showSyncNotice("Error rendering PDF");
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        showSyncNotice(`Error rendering PDF: ${errorMsg}`);
       } finally {
         isRendering = false;
       }
@@ -503,8 +509,9 @@ export class FileCloudPreview {
         });
 
       } catch (e) {
-        console.error("PDF Load Error", e);
-        loadingText.setText("Failed to load PDF");
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        console.error("PDF Load Error", errorMsg);
+        loadingText.setText(`Failed to load PDF: ${errorMsg}`);
       }
     })();
 

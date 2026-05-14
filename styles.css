@@ -2788,18 +2788,6 @@ body .suggestion-container {
 .fns-share-header-group {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: var(--text-normal);
-}
-.fns-share-header-group .fns-share-title-icon {
-  color: var(--interactive-accent);
-  display: flex;
-  align-items: center;
-}
-
-.fns-share-header-group {
-  display: flex;
-  align-items: center;
   gap: 12px;
   font-size: 1.1em;
   font-weight: 600;
@@ -2909,10 +2897,10 @@ body .suggestion-container {
   display: flex;
   align-items: center;
 }
-.fns-share-input-group .fns-input-wrapper input {
+.fns-share-input-group .fns-input-wrapper input.fns-share-input {
   width: 100%;
-  height: 38px !important;
-  line-height: 38px !important;
+  height: 38px;
+  line-height: 38px;
   padding: 0 40px 0 12px;
   border-radius: 8px;
   border: 1px solid var(--background-modifier-border);
@@ -2921,7 +2909,7 @@ body .suggestion-container {
   transition: all 0.2s ease;
   box-sizing: border-box;
 }
-.fns-share-input-group .fns-input-wrapper input:focus {
+.fns-share-input-group .fns-input-wrapper input.fns-share-input:focus {
   border-color: var(--interactive-accent);
   background-color: var(--background-primary);
   box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.1);

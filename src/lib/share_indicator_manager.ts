@@ -8,7 +8,7 @@ export class ShareIndicatorManager {
     // 网络重连处理器引用 / Online handler ref
     private onlineHandler: (() => void) | null = null;
     // 启动延迟定时器 / Startup delay timer
-    private startupTimer: ReturnType<typeof setTimeout> | null = null;
+    private startupTimer: number | null = null;
     // 并发同步守卫 / Concurrent sync guard
     private isSyncing = false;
     // DOM 观察器 / DOM Observer
@@ -21,7 +21,7 @@ export class ShareIndicatorManager {
      */
     async initialize(): Promise<void> {
         if (this.startupTimer !== null) {
-            clearTimeout(this.startupTimer);
+            window.clearTimeout(this.startupTimer);
             this.startupTimer = null;
         }
         if (this.onlineHandler) {
@@ -33,11 +33,11 @@ export class ShareIndicatorManager {
         this.sharedPaths = new Set(saved);
 
         this.onlineHandler = () => {
-            setTimeout(() => this.syncWithServer().catch(() => {}), 5000);
+            window.setTimeout(() => this.syncWithServer().catch(() => {}), 5000);
         };
         window.addEventListener("online", this.onlineHandler);
 
-        this.startupTimer = setTimeout(() => {
+        this.startupTimer = window.setTimeout(() => {
             this.syncWithServer().catch(() => {});
         }, 5000);
 
@@ -53,7 +53,7 @@ export class ShareIndicatorManager {
         });
 
         // 观察整个 body，因为文件浏览器可能会被销毁和重建
-        this.observer.observe(document.body, {
+        this.observer.observe(activeDocument.body, {
             childList: true,
             subtree: true,
             attributes: true,
@@ -71,7 +71,7 @@ export class ShareIndicatorManager {
         const ancestorFolders = this.getAllAncestorFolders();
 
         // 处理原生文件浏览器
-        document.querySelectorAll('.nav-file-title, .nav-folder-title').forEach(el => {
+        activeDocument.querySelectorAll('.nav-file-title, .nav-folder-title').forEach(el => {
             const path = el.getAttribute('data-path');
             if (!path) return;
 
@@ -90,7 +90,7 @@ export class ShareIndicatorManager {
         });
 
         // 处理 Notebook Navigator 等第三方插件 (使用 data-drag-path)
-        document.querySelectorAll('[data-drag-path]').forEach(el => {
+        activeDocument.querySelectorAll('[data-drag-path]').forEach(el => {
             const path = el.getAttribute('data-drag-path');
             if (!path) return;
 
@@ -146,7 +146,7 @@ export class ShareIndicatorManager {
         
         if (this._isFilterActive && this.sharedPaths.size === 0) {
             this._isFilterActive = false;
-            document.body.removeClass('fns-filter-active');
+            activeDocument.body.removeClass('fns-filter-active');
         }
     }
 
@@ -165,10 +165,10 @@ export class ShareIndicatorManager {
     toggleFilter(): void {
         this._isFilterActive = !this._isFilterActive;
         if (this._isFilterActive) {
-            document.body.addClass('fns-filter-active');
+            activeDocument.body.addClass('fns-filter-active');
             this.expandSharedFolders();
         } else {
-            document.body.removeClass('fns-filter-active');
+            activeDocument.body.removeClass('fns-filter-active');
         }
     }
 
@@ -186,7 +186,7 @@ export class ShareIndicatorManager {
     private expandSharedFolders(): void {
         const ancestors = this.getAllAncestorFolders();
         for (const folderPath of ancestors) {
-            const folderEl = document.querySelector(
+            const folderEl = activeDocument.querySelector(
                 `.nav-folder:has(> .nav-folder-title[data-path="${folderPath}"]).is-collapsed`
             );
             if (folderEl) {
@@ -198,7 +198,7 @@ export class ShareIndicatorManager {
 
     unload(): void {
         if (this.startupTimer !== null) {
-            clearTimeout(this.startupTimer);
+            window.clearTimeout(this.startupTimer);
             this.startupTimer = null;
         }
         if (this.onlineHandler) {
@@ -209,9 +209,9 @@ export class ShareIndicatorManager {
             this.observer.disconnect();
             this.observer = null;
         }
-        document.body.removeClass('fns-filter-active');
+        activeDocument.body.removeClass('fns-filter-active');
         // 清理所有标记
-        document.querySelectorAll('[data-fns-shared]').forEach(el => el.removeAttribute('data-fns-shared'));
+        activeDocument.querySelectorAll('[data-fns-shared]').forEach(el => el.removeAttribute('data-fns-shared'));
     }
 
     public regenerateCss(): void {

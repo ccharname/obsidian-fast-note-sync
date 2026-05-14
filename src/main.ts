@@ -19,7 +19,7 @@ import { LockManager } from "./lib/lock_manager";
 import { ConcurrencyManager } from "./lib/concurrency_manager";
 import { handleSync } from "./lib/operator";
 import { HttpApiService } from "./lib/api";
-import { clearAllTempChunks } from "./lib/file_operator";
+import { clearAllTempChunks, abortAllFileOperations, resetFileOperations } from "./lib/file_operator";
 import { $ } from "./i18n/lang";
 import { FileDownloadSession } from "./lib/types";
 
@@ -104,7 +104,7 @@ export default class FastSync extends Plugin {
 
   // 文件下载会话管理
   fileDownloadSessions: Map<string, FileDownloadSession> = new Map()
-  syncTimer: any // 自动同步定时器
+  syncTimer: number | null = null // 自动同步定时器
 
   public lastStatusBarPercentage: number = 0
   public currentSyncType: "full" | "incremental" = "incremental"
@@ -260,6 +260,7 @@ export default class FastSync extends Plugin {
 
   async onload() {
     // 注册自定义颜色图标 / Register custom colored icons
+    resetFileOperations()
     const colors = {
       'note': '#08b94e',
       'attachment': '#7C4DFF',
@@ -299,7 +300,7 @@ export default class FastSync extends Plugin {
     // 注册协议处理器 (核心功能)
     const ssoAction = "fast-note-sync/sso";
     try {
-      this.registerObsidianProtocolHandler(ssoAction, async (data) => {
+      this.registerObsidianProtocolHandler(ssoAction, async (data: Record<string, string>) => {
         if (data?.pushApi) {
           this.settings.api = data.pushApi
           this.settings.apiToken = data.pushApiToken
@@ -424,7 +425,7 @@ export default class FastSync extends Plugin {
         if (key && (key.startsWith(uploadCheckpointPrefix) || anyUploadCheckpointPattern.test(key))) {
           try {
             const data = window.localStorage.getItem(key)
-            const cp = JSON.parse(data || '{}')
+            const cp = JSON.parse(data || '{}') as { timestamp?: number }
             if (!cp.timestamp || now - cp.timestamp > expireMs) {
               window.localStorage.removeItem(key)
             }
@@ -457,6 +458,7 @@ export default class FastSync extends Plugin {
   }
 
   onunload() {
+    abortAllFileOperations()
     this.localStorageManager?.stopWatch()
     this.shareIndicatorManager?.unload()
     this.menuManager?.unload()
@@ -658,7 +660,7 @@ export default class FastSync extends Plugin {
       }
 
       if (this.syncTimer) {
-        clearTimeout(this.syncTimer)
+        window.clearTimeout(this.syncTimer)
       }
       // 用于首次同步测试
       if (this.isFirstSync && this.websocket?.isAuth) {
@@ -697,7 +699,7 @@ export default class FastSync extends Plugin {
    */
   getCommandHotkey(commandId: string): string {
     const fullId = `${this.manifest.id}:${commandId}`;
-    const hotkeyManager = (this.app as any).hotkeyManager;
+    const hotkeyManager = (this.app as unknown as { hotkeyManager?: { getHotkeys(id: string): { modifiers: string[]; key: string }[]; getDefaultHotkeys(id: string): { modifiers: string[]; key: string }[] } }).hotkeyManager;
     let hotkeys = hotkeyManager?.getHotkeys(fullId);
 
     // 如果没有自定义热键，尝试获取默认热键
@@ -724,7 +726,8 @@ export default class FastSync extends Plugin {
     const key = parts.find(p => !["Mod", "Ctrl", "Alt", "Shift", "Meta"].includes(p));
 
     const hotkey = { modifiers, key: key || "" };
-    await (this.app as any).hotkeyManager?.setHotkeys(fullId, [hotkey]);
+    const hotkeyManager = (this.app as unknown as { hotkeyManager?: { setHotkeys(id: string, hotkeys: { modifiers: string[]; key: string }[]): Promise<void> } }).hotkeyManager;
+    await hotkeyManager?.setHotkeys(fullId, [hotkey]);
   }
 
   /**
@@ -751,7 +754,8 @@ export default class FastSync extends Plugin {
     if (leaves.length > 0) {
       const leaf = leaves[0]
       // 如果已经打开，判断是否处于当前视图且可见，如果是则关闭
-      if (leaf === workspace.activeLeaf || (leaf as WorkspaceLeaf & { view: { containerEl: HTMLElement } }).view?.containerEl?.isShown()) {
+      const containerEl = leaf.view.containerEl as HTMLElement & { isShown(): boolean };
+      if (leaf === workspace.activeLeaf || containerEl.isShown()) {
         leaf.detach()
         return
       }
@@ -765,6 +769,10 @@ export default class FastSync extends Plugin {
         workspace.revealLeaf(leaf)
       }
     }
+  }
+
+  async activateRecycleBinView() {
+    new RecycleBinModal(this.app, this).open();
   }
 
 }

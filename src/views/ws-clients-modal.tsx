@@ -5,6 +5,7 @@ import * as React from "react";
 import type FastSync from "../main";
 import { $ } from "../i18n/lang";
 import { LucideIcon } from "./note-history/lucide-icon";
+import { WSClient } from "../lib/api";
 
 export class WSClientsModal extends Modal {
     private root: Root | null = null;
@@ -37,7 +38,7 @@ export class WSClientsModal extends Modal {
 }
 
 const WSClientsView = ({ plugin }: { plugin: FastSync }) => {
-    const [clients, setClients] = React.useState<any[]>([]);
+    const [clients, setClients] = React.useState<WSClient[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
 
     const loadClients = async () => {
@@ -111,7 +112,7 @@ const WSClientsView = ({ plugin }: { plugin: FastSync }) => {
                             </div>
                             <div className="fns-ws-clients-item-bottom">
                                 <div className="fns-ws-clients-item-timestamp">
-                                    {$("ui.system.wsStartTime")}: {new Date(client.startTime).toLocaleString()}
+                                    {$("ui.system.wsStartTime")}: {client.startTime ? new Date(client.startTime).toLocaleString() : $("ui.common.na")}
                                 </div>
                                 <div className="fns-ws-clients-item-uid-info">
                                     UID: {client.uid}

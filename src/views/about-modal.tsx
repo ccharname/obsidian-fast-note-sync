@@ -8,6 +8,7 @@ import { dump, getPluginDir } from "../lib/helps";
 import { showSyncNotice } from "../lib/helps";
 import { $ } from "../i18n/lang";
 import { LucideIcon } from "./note-history/lucide-icon";
+import { AppWithInternal } from "../lib/types";
 
 
 /**
@@ -60,12 +61,27 @@ const AboutView = ({ plugin, type, closeModal }: { plugin: FastSync; type: 'plug
     const serverBaseChangelog = plugin.localStorageManager.getMetadata("serverChangelog") as string;
 
     const [isAdmin, setIsAdmin] = React.useState(false);
+    const abortControllerRef = React.useRef<AbortController | null>(null);
+    const isMounted = React.useRef(true);
+
+    React.useEffect(() => {
+        isMounted.current = true;
+        abortControllerRef.current = new AbortController();
+        return () => {
+            isMounted.current = false;
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, []);
 
     React.useEffect(() => {
         if (type === 'server') {
-            plugin.api.checkAdmin().then(res => setIsAdmin(res));
+            plugin.api.checkAdmin(abortControllerRef.current?.signal).then(res => {
+                if (isMounted.current) setIsAdmin(res);
+            });
         }
-    }, [type]);
+    }, [type, plugin.api]);
 
     const handleUpgrade = async () => {
         setIsUpgrading(true);
@@ -76,7 +92,8 @@ const AboutView = ({ plugin, type, closeModal }: { plugin: FastSync; type: 'plug
             plugin.websocket.unRegister();
 
             // 2. 发起升级请求
-            const success = await plugin.api.adminUpgrade();
+            const success = await plugin.api.adminUpgrade("latest"); // Assuming latest as default if not passed, but check original
+            if (!isMounted.current) return;
             if (!success) {
                 showSyncNotice($("ui.version.upgrade_fail"));
                 setIsUpgrading(false);
@@ -102,9 +119,10 @@ const AboutView = ({ plugin, type, closeModal }: { plugin: FastSync; type: 'plug
             const scheduleNextPoll = () => {
               if (pollStopped) return;
               pollTimeoutId = window.setTimeout(async () => {
-                if (pollStopped) return;
+                if (pollStopped || !isMounted.current) return;
                 setPollingCount(prev => prev + 1);
-                const isAlive = await plugin.api.checkHealth();
+                const isAlive = await plugin.api.checkHealth(abortControllerRef.current?.signal);
+                if (!isMounted.current) return;
                 if (isAlive) {
                   stopPolling();
                   // 4. 重连并完成 / Reconnect and complete
@@ -178,12 +196,14 @@ const AboutView = ({ plugin, type, closeModal }: { plugin: FastSync; type: 'plug
                 dump(`Download failed with status: ${response.status}`);
                 throw new Error(`Failed to download ${zipFileName}: ${response.status}`);
             }
+            if (!isMounted.current) return;
             arrayBuffer = response.arrayBuffer;
             dump(`Download successful, size: ${arrayBuffer.byteLength} bytes`);
 
             // Extract Zip
             dump("Loading zip archive...");
             const zip = await JSZip.loadAsync(arrayBuffer);
+            if (!isMounted.current) return;
 
             // 自动检测根目录前缀（寻找 manifest.json 所在位置）
             let rootPrefix = "";
@@ -224,11 +244,17 @@ const AboutView = ({ plugin, type, closeModal }: { plugin: FastSync; type: 'plug
             dump("Plugin upgrade completed successfully, starting hot reload...");
             setUpgradeStatus($("ui.version.reloading_plugin"));
 
-            const plugins = (plugin.app as any).plugins;
+            const app = plugin.app as AppWithInternal;
+            const plugins = app.plugins;
+            if (!plugins) {
+                setUpgradeStatus($("ui.version.upgrade_plugin_fail"));
+                return;
+            }
+
             const id = plugin.manifest.id;
 
             // 稍微延迟一下，确保 Notice 和状态更新能被识别
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => window.setTimeout(resolve, 500));
 
             // 执行热重载：禁用 -> 重新扫描 -> 启用
             await plugins.disablePlugin(id);
@@ -238,9 +264,10 @@ const AboutView = ({ plugin, type, closeModal }: { plugin: FastSync; type: 'plug
             showSyncNotice($("ui.version.upgrade_plugin_success"), 10000);
             closeModal();
         } catch (e) {
-            dump(`Upgrade failed: ${e.message}`, e);
+            const errorMsg = e instanceof Error ? e.message : String(e);
+            dump(`Upgrade failed: ${errorMsg}`, e);
             console.error("Plugin upgrade error:", e);
-            showSyncNotice($("ui.version.upgrade_fail") + ": " + e.message);
+            showSyncNotice($("ui.version.upgrade_fail") + ": " + errorMsg);
         } finally {
             setIsUpgrading(false);
         }

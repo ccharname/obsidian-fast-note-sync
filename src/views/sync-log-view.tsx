@@ -1,8 +1,9 @@
-import { ItemView, WorkspaceLeaf, moment, setIcon, Platform } from "obsidian";
+import { ItemView, WorkspaceLeaf, moment, setIcon, Platform, MenuItem } from "obsidian";
 import { createRoot, Root } from "react-dom/client";
 import * as React from "react";
 
 import { SyncLogManager, SyncLog } from "../lib/sync_log_manager";
+import { MenuItemWithInternal } from "../lib/types";
 import { $ } from "../i18n/lang";
 import FastSync from "../main";
 
@@ -82,7 +83,7 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
     }, [plugin]);
 
     const scrollRef = React.useRef<HTMLDivElement>(null);
-    const throttleTimerRef = React.useRef<any>(null);
+    const throttleTimerRef = React.useRef<number | null>(null);
     const pendingLogsRef = React.useRef<SyncLog[] | null>(null);
 
     React.useEffect(() => {
@@ -117,7 +118,7 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
         return () => {
             unsubscribe();
             if (throttleTimerRef.current) {
-                clearTimeout(throttleTimerRef.current);
+                window.clearTimeout(throttleTimerRef.current);
             }
         };
     }, []);
@@ -192,14 +193,14 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
         const menu = new Menu();
 
         // 类别筛选子菜单
-        menu.addItem((item: { setTitle: (t: string) => any, setIcon: (i: string) => any, setSection: (s: string) => any, setSubmenu: () => any }) => {
+        menu.addItem((item: MenuItemWithInternal) => {
             item.setTitle($("ui.log.filter_category"))
                 .setIcon("layers")
                 .setSection("category");
             
             const subMenu = item.setSubmenu();
             categories.forEach(cat => {
-                subMenu.addItem((subItem: { setTitle: (t: string) => any, setChecked: (c: boolean) => any, onClick: (cb: () => void) => any, setIcon: (i: string) => any }) => {
+                subMenu.addItem((subItem: MenuItem) => {
                     subItem.setTitle(cat.label)
                         .setChecked(categoryFilter === cat.id)
                         .onClick(() => setCategoryFilter(cat.id));
@@ -212,14 +213,14 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
         });
 
         // 类型筛选子菜单
-        menu.addItem((item: { setTitle: (t: string) => any, setIcon: (i: string) => any, setSection: (s: string) => any, setSubmenu: () => any }) => {
+        menu.addItem((item: MenuItemWithInternal) => {
             item.setTitle($("ui.log.filter_type"))
                 .setIcon("arrow-up-down")
                 .setSection("type");
             
             const subMenu = item.setSubmenu();
             types.forEach(t => {
-                subMenu.addItem((subItem: { setTitle: (t: string) => any, setChecked: (c: boolean) => any, onClick: (cb: () => void) => any, setIcon: (i: string) => any }) => {
+                subMenu.addItem((subItem: MenuItem) => {
                     subItem.setTitle(t.label)
                         .setChecked(typeFilter === t.id)
                         .onClick(() => setTypeFilter(t.id));
@@ -232,7 +233,7 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
         });
 
         menu.addSeparator();
-        menu.addItem((item: { setTitle: (t: string) => any, setIcon: (i: string) => any, onClick: (cb: () => void) => any }) => {
+        menu.addItem((item: MenuItem) => {
             item.setTitle($("ui.button.reset"))
                 .setIcon("rotate-ccw")
                 .onClick(() => {

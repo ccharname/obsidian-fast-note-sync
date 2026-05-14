@@ -121,6 +121,7 @@ export class ShareModal extends Modal {
         const linkInput = linkInputWrapper.createEl("input", {
             type: "text",
             value: shareUrl,
+            cls: "fns-share-input"
         });
         linkInput.readOnly = true;
 
@@ -157,7 +158,8 @@ export class ShareModal extends Modal {
         const pwdInput = pwdInputWrapper.createEl("input", {
             type: this.isPasswordVisible ? "text" : "password",
             value: displayValue,
-            placeholder: $("ui.share.passwordPlaceholder")
+            placeholder: $("ui.share.passwordPlaceholder"),
+            cls: "fns-share-input"
         });
 
         const eyeBtn = new ButtonComponent(pwdInputWrapper)
@@ -219,6 +221,7 @@ export class ShareModal extends Modal {
             const shortInput = shortInputWrapper.createEl("input", {
                 type: "text",
                 value: this.shareData.shortLink,
+                cls: "fns-share-input"
             });
             shortInput.readOnly = true;
 
@@ -252,6 +255,7 @@ export class ShareModal extends Modal {
             const shortInput = shortInputWrapper.createEl("input", {
                 type: "text",
                 placeholder: $("ui.share.shortLink"),
+                cls: "fns-share-input"
             });
             shortInput.readOnly = true; // 占位显示
 

@@ -59,7 +59,7 @@ export default {
   "setting.sync.binary_limit": "첨부 파일 동기화 크기 제한",
   "setting.sync.binary_limit_desc": "활성화 시 128MB 이상의 첨부 파일은 동기화되지 않으며, 모바일 기기의 OOM 위험을 줄입니다. 비활성화 시에는 크기 제한이 적용되지 않습니다.",
   "setting.sync.auto_config": "설정 자동 동기화",
-  "setting.sync.auto_config_desc": "활성화하면 <b>.obsidian</b> 디렉토리의 핵심 설정, 플러그인, 외관, 테마 등의 설정을 동기화합니다. 처음 활성화할 경우 서버 설정이 로컬 설정을 덮어씁니다.",
+  "setting.sync.auto_config_desc": "활성화하면 <b>${configDir}</b> 디렉토리의 핵심 설정, 플러그인, 외관, 테마 등의 설정을 동기화합니다. 처음 활성화할 경우 서버 설정이 로컬 설정을 덮어씁니다.",
   "setting.sync.pdf_state": "PDF 상태 동기화",
   "setting.sync.pdf_state_desc": "활성화하면 PDF 뷰어의 읽기 상태를 동기화합니다. (이 설정은 설정 동기화를 활성화해야 합니다)",
   "setting.sync.merge_strategy": "노트 오프라인 편집 병합 전략",
@@ -80,7 +80,7 @@ export default {
 
   "setting.sync.exclude": "동기화 제외 (노트/첨부파일/설정)",
   "setting.sync.exclude_placeholder": "경로 또는 정규식, 한 줄에 하나",
-  "setting.sync.exclude_desc": "규칙에 맞는 노트, 첨부파일, 디렉토리 또는 **.obsidian** 설정 파일은 동기화에 참여하지 않습니다.\n\n**규칙 설명:**\n- `경로 접두사`(예: 폴더 경로) 또는 `정규식`을 지원합니다.\n- 각 줄은 독립적인 규칙을 나타냅니다.\n- 오른쪽 **Aa** 버튼을 클릭하여 대소문자 구분 전환 (활성화 시 대소문자 엄격 일치).\n\n**예시:**\n\n| 규칙 | 일치 결과 |\n| --- | --- |\n| `Folder1/abc.md` | 해당 파일 정확 일치 |\n| `Folder1` | Folder1 디렉토리 및 모든 내용 일치 |\n| `.obsidian/plugins/` | 특정 플러그인 설정 디렉토리 제외 |\n| `.*\\.tmp$` | 정규식으로 .tmp 로 끝나는 모든 파일 일치 |",
+  "setting.sync.exclude_desc": "규칙에 맞는 노트, 첨부파일, 디렉토리 또는 **${configDir}** 설정 파일은 동기화에 참여하지 않습니다.\n\n**규칙 설명:**\n- `경로 접두사`(예: 폴더 경로) 또는 `정규식`을 지원합니다.\n- 각 줄은 독립적인 규칙을 나타냅니다.\n- 오른쪽 **Aa** 버튼을 클릭하여 대소문자 구분 전환 (활성화 시 대소문자 엄격 일치).\n\n**예시:**\n\n| 규칙 | 일치 결과 |\n| --- | --- |\n| `Folder1/abc.md` | 해당 파일 정확 일치 |\n| `Folder1` | Folder1 디렉토리 및 모든 내용 일치 |\n| `${configDir}/plugins/` | 특정 플러그인 설정 디렉토리 제외 |\n| `.*\\.tmp$` | 정규식으로 .tmp 로 끝나는 모든 파일 일치 |",
   "setting.sync.exclude_extensions": "동기화 확장자 제외",
   "setting.sync.exclude_extensions_placeholder": ".tmp 또는 .log과 같은 확장자 입력",
   "setting.sync.exclude_extensions_desc": "나열된 확장자를 가진 파일은 동기화에 참여하지 않습니다. 한 줄에 하나씩, `.` 으로 시작하는 것을 권장합니다.\n예: `.tmp`, `.bak`.",

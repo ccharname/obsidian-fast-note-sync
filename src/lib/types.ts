@@ -1,3 +1,5 @@
+import { App, Menu, MenuItem } from "obsidian";
+
 export type SyncMode = "auto" | "note" | "config";
 
 export interface SnapFile {
@@ -156,4 +158,43 @@ export interface FolderSyncData {
     missingFolders: PathHashFile[];
     context?: string;
 }
+
+/**
+ * Internal Obsidian types for better type safety when accessing unofficial APIs.
+ */
+export interface AppWithInternal extends App {
+    setting?: {
+        open(): void;
+        openTabById(id: string): void;
+        activeTab?: {
+            display(): void;
+        };
+        containerEl: HTMLElement;
+        close(): void;
+    };
+    plugins?: {
+        enabledPlugins: Set<string>;
+        disablePlugin(id: string): Promise<void>;
+        enablePlugin(id: string): Promise<void>;
+        loadManifests(): Promise<void>;
+        manifests: Record<string, unknown>;
+        plugins: Record<string, unknown>;
+    };
+    internalPlugins?: {
+        getPluginById(id: string): unknown;
+        plugins: Record<string, unknown>;
+    };
+    hotkeys?: {
+        load(): Promise<void>;
+    };
+}
+
+export interface MenuItemWithDom {
+    dom: HTMLElement;
+}
+
+export interface MenuItemWithInternal extends MenuItem {
+    setSubmenu(): Menu;
+}
+
 

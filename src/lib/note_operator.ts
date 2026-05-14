@@ -464,7 +464,7 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
           const renamedFile = plugin.app.vault.getFileByPath(normalizedNewPath)
           if (renamedFile instanceof TFile) {
             const content = await plugin.app.vault.read(renamedFile)
-            const options: any = {};
+            const options: { ctime?: number; mtime?: number } = {};
             if (data.ctime && data.ctime > 0) options.ctime = data.ctime;
             if (data.mtime && data.mtime > 0) options.mtime = data.mtime;
             await plugin.app.vault.modify(renamedFile, content, options);

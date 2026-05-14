@@ -117,7 +117,7 @@ export class EventManager {
   }
 
   private onVisibilityChange = () => {
-    if (document.visibilityState === "hidden") {
+    if (activeDocument.visibilityState === "hidden") {
       if (this.plugin.settings.autoPauseMinimized) {
         dump("Obsidian 已最小化，自动暂停同步")
         this.plugin.disableWatch()

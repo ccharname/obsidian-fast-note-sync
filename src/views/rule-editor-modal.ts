@@ -1,6 +1,7 @@
 import { App, Modal, Platform } from "obsidian";
 import { SyncRule } from "../lib/helps";
 import { RuleEditor } from "./rule-editor";
+import { PathSuggestOptions } from "./path-suggest";
 
 export class RuleEditorModal extends Modal {
   private editor: RuleEditor;
@@ -15,7 +16,7 @@ export class RuleEditorModal extends Modal {
     addButtonText?: string,
     inputPlaceholder?: string,
     usePathSuggest: boolean = false,
-    pathSuggestOptions: unknown = {}
+    pathSuggestOptions: PathSuggestOptions = {}
   ) {
     super(app);
     this.titleEl.setText(title);

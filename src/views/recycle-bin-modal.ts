@@ -30,6 +30,7 @@ export class RecycleBinModal extends Modal {
 
     private selectedPaths: Set<string> = new Set();
     private selectedPathHashes: Map<string, string> = new Map();
+    private abortController: AbortController | null = null;
 
     constructor(app: App, plugin: FastSync) {
         super(app);
@@ -43,6 +44,10 @@ export class RecycleBinModal extends Modal {
     }
 
     onClose() {
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
         const { contentEl } = this;
         contentEl.empty();
     }
@@ -172,6 +177,12 @@ export class RecycleBinModal extends Modal {
 
     private async switchTab(tab: 'note' | 'file') {
         if (this.activeTab === tab) return;
+
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
+
         this.activeTab = tab;
         this.page = 1;
         this.items = [];
@@ -311,14 +322,17 @@ export class RecycleBinModal extends Modal {
     }
 
     private async loadData(append: boolean = false) {
-        if (this.loading && !append) return;
-        this.loading = true;
+        if (this.abortController) {
+            this.abortController.abort();
+        }
+        this.abortController = new AbortController();
+        const signal = this.abortController.signal;
 
         this.render();
 
         try {
             if (this.activeTab === 'note') {
-                const res = await this.api.getNoteList(this.page, this.pageSize, true) as any;
+                const res = await this.api.getNoteList(this.page, this.pageSize, true, "", signal);
                 const newList = (res?.list || []) as RecycleItem[];
                 if (append) {
                     this.items = [...(this.items || []), ...newList];
@@ -327,7 +341,7 @@ export class RecycleBinModal extends Modal {
                 }
                 this.totalRows = res?.pager?.totalRows || 0;
             } else {
-                const res = await this.api.getFileList(this.page, this.pageSize, true) as any;
+                const res = await this.api.getFileList(this.page, this.pageSize, true, "", signal);
                 const newList = (res?.list || []) as RecycleItem[];
                 if (append) {
                     this.items = [...(this.items || []), ...newList];
@@ -337,20 +351,26 @@ export class RecycleBinModal extends Modal {
                 this.totalRows = res?.pager?.totalRows || 0;
             }
         } catch (e) {
+            if (e instanceof Error && e.name === 'AbortError') {
+                return;
+            }
             showSyncNotice($("ui.history.load_failed"));
             console.error("Failed to load recycle bin data", e);
         } finally {
-            this.loading = false;
-            this.render();
+            if (!signal.aborted) {
+                this.loading = false;
+                this.render();
+            }
         }
     }
 
     private async restoreItem(item: RecycleItem) {
         let success = false;
+        const signal = this.abortController?.signal;
         if (this.activeTab === 'note') {
-            success = await this.api.restoreNote(item.path, item.pathHash);
+            success = await this.api.restoreNote(item.path, item.pathHash, signal);
         } else {
-            success = await this.api.restoreFile(item.path, item.pathHash);
+            success = await this.api.restoreFile(item.path, item.pathHash, signal);
         }
 
         if (success) {
@@ -369,7 +389,8 @@ export class RecycleBinModal extends Modal {
             showSyncNotice($("ui.history.load_failed"));
             return;
         }
-        const success = await this.api.clearRecycleBin(this.activeTab, item.path, item.pathHash);
+        const signal = this.abortController?.signal;
+        const success = await this.api.clearRecycleBin(this.activeTab, item.path, item.pathHash, signal);
         if (success) {
             showSyncNotice($("ui.recycle_bin.delete_success"));
             this.items = this.items.filter(i => i.path !== item.path);
@@ -382,14 +403,16 @@ export class RecycleBinModal extends Modal {
 
     private async bulkRestore() {
         const paths = Array.from(this.selectedPaths);
+        const signal = this.abortController?.signal;
         let successCount = 0;
         for (const path of paths) {
+            if (signal?.aborted) break;
             const hash = this.selectedPathHashes.get(path);
             let success = false;
             if (this.activeTab === 'note') {
-                success = await this.api.restoreNote(path, hash);
+                success = await this.api.restoreNote(path, hash, signal);
             } else {
-                success = await this.api.restoreFile(path, hash);
+                success = await this.api.restoreFile(path, hash, signal);
             }
             if (success) successCount++;
         }
@@ -405,10 +428,9 @@ export class RecycleBinModal extends Modal {
 
     private async bulkDelete() {
         const allPaths = Array.from(this.selectedPaths);
-        // 过滤出有 pathHash 的项，确保 paths 和 hashes 数组严格对齐
-        // 缺少 pathHash 的项跳过，避免数组长度不匹配导致服务端清空全部回收站 (Issue #115)
-        const paths = allPaths.filter(p => this.selectedPathHashes.has(p));
-        const hashes = paths.map(p => this.selectedPathHashes.get(p)!);
+        const paths = allPaths.filter((p: string) => this.selectedPathHashes.has(p));
+        const hashes = paths.map((p: string) => this.selectedPathHashes.get(p)!);
+        const signal = this.abortController?.signal;
 
         if (paths.length === 0) {
             showSyncNotice($("ui.history.load_failed"));
@@ -417,7 +439,8 @@ export class RecycleBinModal extends Modal {
 
         let successCount = 0;
         for (let i = 0; i < paths.length; i++) {
-            const success = await this.api.clearRecycleBin(this.activeTab, paths[i], hashes[i]);
+            if (signal?.aborted) break;
+            const success = await this.api.clearRecycleBin(this.activeTab, paths[i], hashes[i], signal);
             if (success) successCount++;
         }
 
@@ -431,7 +454,8 @@ export class RecycleBinModal extends Modal {
     }
 
     private async clearAll() {
-        const success = await this.api.clearRecycleBin(this.activeTab);
+        const signal = this.abortController?.signal;
+        const success = await this.api.clearRecycleBin(this.activeTab, undefined, undefined, signal);
         if (success) {
             showSyncNotice($("ui.recycle_bin.clear_success"));
             this.items = [];

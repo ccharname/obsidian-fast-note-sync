@@ -119,7 +119,7 @@ export class ConfigHashManager {
                 if (processedConfigs % 50 === 0) {
                     notice.setMessage(`正在初始化配置哈希映射... (${processedConfigs}/${totalConfigs})`);
                     // 让出主线程,避免阻塞 UI
-                    await new Promise(resolve => setTimeout(resolve, 0));
+                    await new Promise(resolve => window.setTimeout(resolve, 0));
                 }
             }
 
@@ -132,7 +132,8 @@ export class ConfigHashManager {
             dump(`ConfigHashManager: 构建完成,共 ${totalConfigs} 个配置`);
         } catch (error) {
             notice.hide();
-            showSyncNotice(`配置哈希映射初始化失败: ${error.message}`);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            showSyncNotice(`配置哈希映射初始化失败: ${errorMsg}`);
             dump("ConfigHashManager: 构建失败", error);
             throw error;
         }
@@ -235,7 +236,7 @@ export class ConfigHashManager {
                 }
             }
 
-            const parsed = JSON.parse(data);
+            const parsed = JSON.parse(data) as Record<string, unknown>;
             const migratedMap = new Map<string, HashCache>();
             let needsSave = false;
 
@@ -268,7 +269,8 @@ export class ConfigHashManager {
             this.plugin.app.saveLocalStorage(this.storageKey, data);
         } catch (error) {
             dump("ConfigHashManager: 保存到 localStorage 失败", error);
-            showSyncNotice(`保存配置哈希映射失败: ${error.message}`);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            showSyncNotice(`保存配置哈希映射失败: ${errorMsg}`);
         }
     }
 

@@ -59,7 +59,7 @@ export default {
   "setting.sync.binary_limit": "添付ファイルの同期サイズ制限",
   "setting.sync.binary_limit_desc": "有効にすると、128MB を超える添付ファイルは同期されなくなります。これによりモバイル端末の OOM 発生リスクを低減します。無効にすると、サイズ制限は適用されません。",
   "setting.sync.auto_config": "設定の自動同期",
-  "setting.sync.auto_config_desc": "有効にすると、<b>.obsidian</b> ディレクトリ内のコア設定、プラグイン、外観、テーマなどの設定が同期されます。初めて有効にした場合、サーバーの設定がローカル設定を上書きします。",
+  "setting.sync.auto_config_desc": "有効にすると、<b>${configDir}</b> ディレクトリ内のコア設定、プラグイン、外観、テーマなどの設定が同期されます。初めて有効にした場合、サーバーの設定がローカル設定を上書きします。",
   "setting.sync.pdf_state": "PDF 状態の同期",
   "setting.sync.pdf_state_desc": "有効にすると、PDF ビューアの読書状態が同期されます。(この設定には設定項目の同期を有効にする必要があります)",
   "setting.sync.merge_strategy": "ノートのオフライン編集マージ戦略",
@@ -80,7 +80,7 @@ export default {
 
   "setting.sync.exclude": "同期除外 (ノート/添付ファイル/設定)",
   "setting.sync.exclude_placeholder": "パスまたは正規表現、1 行に 1 つ",
-  "setting.sync.exclude_desc": "ルールに一致するノート、添付ファイル、ディレクトリ、または **.obsidian** 設定ファイルは同期に参加しません。\n\n**ルールの説明：**\n- `パスプレフィックス`（フォルダパスなど）または `正規表現` をサポートします。\n- 各行は独立したルールを表します。\n- 右側の **Aa** ボタンをクリックして大文字小文字の区別を切り替えます（有効時は厳密に大文字小文字を区別します）。\n\n**例：**\n\n| ルール | 一致結果 |\n| --- | --- |\n| `Folder1/abc.md` | そのファイルを正確に一致 |\n| `Folder1` | Folder1 ディレクトリとその中身すべてを一致 |\n| `.obsidian/plugins/` | 特定のプラグインの設定ディレクトリを除外 |\n| `.*\\.tmp$` | 正規表現で .tmp で終わるすべてのファイルを一致 |",
+  "setting.sync.exclude_desc": "ルールに一致するノート、添付ファイル、ディレクトリ、または **${configDir}** 設定ファイルは同期に参加しません。\n\n**ルールの説明：**\n- `パスプレフィックス`（フォルダパスなど）または `正規表現` をサポートします。\n- 各行は独立したルールを表します。\n- 右側の **Aa** ボタンをクリックして大文字小文字の区別を切り替えます（有効時は厳密に大文字小文字を区別します）。\n\n**例：**\n\n| ルール | 一致結果 |\n| --- | --- |\n| `Folder1/abc.md` | そのファイルを正確に一致 |\n| `Folder1` | Folder1 ディレクトリとその中身すべてを一致 |\n| `${configDir}/plugins/` | 特定のプラグインの設定ディレクトリを除外 |\n| `.*\\.tmp$` | 正規表現で .tmp で終わるすべてのファイルを一致 |",
   "setting.sync.exclude_extensions": "同期拡張子の除外",
   "setting.sync.exclude_extensions_placeholder": "拡張子を入力（例：.tmp や .log）",
   "setting.sync.exclude_extensions_desc": "リストされた拡張子に一致するファイルは同期に参加しません。1 行に 1 つ、` .` で始まることを推奨します。\n例：`.tmp`、`.bak`。",

@@ -7,6 +7,7 @@ import { SettingsView, SupportView } from "./views/settings-view";
 import { RuleEditorModal } from "./views/rule-editor-modal";
 import { ConfirmModal } from "./views/confirm-modal";
 import { RuleEditor } from "./views/rule-editor";
+import { PathSuggestOptions } from "./views/path-suggest";
 import { $ } from "./i18n/lang";
 import FastSync from "./main";
 
@@ -296,7 +297,7 @@ export class SettingTab extends PluginSettingTab {
     this.roots.forEach((root) => {
       try {
         root.unmount()
-      } catch (e) {
+      } catch {
         /* ignore */
       }
     })
@@ -445,7 +446,7 @@ export class SettingTab extends PluginSettingTab {
     }
 
     if (activeTabEl) {
-      requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
         if (!activeTabEl) return
         activeTabEl.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" })
       })
@@ -461,7 +462,7 @@ export class SettingTab extends PluginSettingTab {
           const numValue = parseInt(value)
           if (!isNaN(numValue) && numValue >= 0) {
             this.plugin.settings.startupDelay = numValue
-            await (this.plugin as any).saveSettings()
+            await this.plugin.saveSettings()
           }
         }),
     )
@@ -474,7 +475,7 @@ export class SettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.updateSource || "github")
         .onChange(async (value: "github" | "cnb") => {
           this.plugin.settings.updateSource = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
         }),
     )
     this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.debug.update_source_desc"))
@@ -558,10 +559,10 @@ export class SettingTab extends PluginSettingTab {
                 v8: process.versions.v8,
               }
               : {},
-          capacitor: (window as unknown as { Capacitor: unknown }).Capacitor
+          capacitor: (window as unknown as { Capacitor: { getPlatform(): string; isNative: boolean } }).Capacitor
             ? {
-              platform: (window as any).Capacitor.getPlatform(),
-              isNative: (window as any).Capacitor.isNative,
+              platform: (window as unknown as { Capacitor: { getPlatform(): string; isNative: boolean } }).Capacitor.getPlatform(),
+              isNative: (window as unknown as { Capacitor: { getPlatform(): string; isNative: boolean } }).Capacitor.isNative,
             }
             : "not found",
           obsidianVersion: (this.app as unknown as { version: string }).version || "unknown",
@@ -723,7 +724,7 @@ export class SettingTab extends PluginSettingTab {
             await rebuildAllHashes(this.plugin)
 
             // 保存设置
-            await (this.plugin as any).saveSettings()
+            await this.plugin.saveSettings()
 
             showSyncNotice($("setting.debug.reset_all_success"))
 
@@ -767,7 +768,7 @@ export class SettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.networkLibrary)
         .onChange(async (value: "fetch" | "requestUrl") => {
           this.plugin.settings.networkLibrary = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
         }),
     )
     this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.debug.network_library_desc"))
@@ -778,7 +779,7 @@ export class SettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.debugRemoteUrls)
         .onChange(async (value) => {
           this.plugin.settings.debugRemoteUrls = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
         }),
     )
     this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.support.debug_url_desc"))
@@ -791,7 +792,7 @@ export class SettingTab extends PluginSettingTab {
       toggle.setValue(this.plugin.settings.isShowNotice).onChange(async (value) => {
         if (value != this.plugin.settings.isShowNotice) {
           this.plugin.settings.isShowNotice = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
           this.display()
         }
       }),
@@ -813,7 +814,7 @@ export class SettingTab extends PluginSettingTab {
               if (!isNaN(numValue) && numValue >= 0) {
                 this.plugin.settings.mobileToastTop = numValue
                 this.plugin.applyMobileToastTop()
-                await (this.plugin as any).saveSettings()
+                await this.plugin.saveSettings()
               }
             })
           toastTopText = text
@@ -832,7 +833,7 @@ export class SettingTab extends PluginSettingTab {
       toggle.setValue(this.plugin.settings.showShareIcon).onChange(async (value) => {
         if (value != this.plugin.settings.showShareIcon) {
           this.plugin.settings.showShareIcon = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
           this.plugin.shareIndicatorManager.regenerateCss()
         }
       }),
@@ -843,10 +844,10 @@ export class SettingTab extends PluginSettingTab {
       toggle.setValue(this.plugin.settings.showUpgradeBadge).onChange(async (value) => {
         if (value != this.plugin.settings.showUpgradeBadge) {
           this.plugin.settings.showUpgradeBadge = value
-          await (this.plugin as any).saveSettings()
-            (this.plugin.menuManager as any)?.refreshUpgradeBadge()
+          await this.plugin.saveSettings()
+          this.plugin.menuManager?.refreshUpgradeBadge()
             // 触发设置变更事件以通知 React 视图 / Trigger settings change event to notify React views
-            (this.app.workspace as unknown as { trigger: (name: string) => void }).trigger("fns:settings-change")
+            this.app.workspace.trigger("fns:settings-change")
         }
       }),
     )
@@ -883,7 +884,7 @@ export class SettingTab extends PluginSettingTab {
         .setDisabled(!Platform.isMobile)
         .onChange(async (value: string) => {
           this.plugin.settings.mobileStatusDotPosition = value as "hidden" | "top-right" | "top-left" | "bottom-right" | "bottom-left" | "menu-bar"
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
           this.plugin.menuManager?.updateRibbonIcon(this.plugin.websocket.isAuth)
         }),
     )
@@ -917,7 +918,7 @@ export class SettingTab extends PluginSettingTab {
             this.plugin.wsSettingChange = true
             this.plugin.settings.api = value
             this.plugin.localStorageManager.clearSyncTime()
-            await (this.plugin as any).saveSettings()
+            await this.plugin.saveSettings()
           }
         }),
     )
@@ -932,7 +933,7 @@ export class SettingTab extends PluginSettingTab {
             this.plugin.wsSettingChange = true
             this.plugin.settings.apiToken = value
             this.plugin.localStorageManager.clearSyncTime()
-            await (this.plugin as any).saveSettings()
+            await this.plugin.saveSettings()
           }
         }),
     )
@@ -946,7 +947,7 @@ export class SettingTab extends PluginSettingTab {
           this.plugin.wsSettingChange = true
           this.plugin.settings.vault = value
           this.plugin.localStorageManager.clearSyncTime()
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
         }),
     )
     this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.remote.vault_name_desc"))
@@ -1196,7 +1197,7 @@ export class SettingTab extends PluginSettingTab {
       toggle.setValue(this.plugin.settings.pdfSyncEnabled).onChange(async (value) => {
         if (value != this.plugin.settings.pdfSyncEnabled) {
           this.plugin.settings.pdfSyncEnabled = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
         }
       }),
     )
@@ -1235,7 +1236,7 @@ export class SettingTab extends PluginSettingTab {
       toggle.setValue(this.plugin.settings.offlineDeleteSyncEnabled).onChange(async (value) => {
         if (value != this.plugin.settings.offlineDeleteSyncEnabled) {
           this.plugin.settings.offlineDeleteSyncEnabled = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
         }
       }),
     )
@@ -1245,7 +1246,7 @@ export class SettingTab extends PluginSettingTab {
       toggle.setValue(this.plugin.settings.manualSyncEnabled).onChange(async (value) => {
         if (value != this.plugin.settings.manualSyncEnabled) {
           this.plugin.settings.manualSyncEnabled = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
         }
       }),
     )
@@ -1255,7 +1256,7 @@ export class SettingTab extends PluginSettingTab {
       toggle.setValue(this.plugin.settings.readonlySyncEnabled).onChange(async (value) => {
         if (value != this.plugin.settings.readonlySyncEnabled) {
           this.plugin.settings.readonlySyncEnabled = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
         }
       }),
     )
@@ -1265,7 +1266,7 @@ export class SettingTab extends PluginSettingTab {
       toggle.setValue(this.plugin.settings.autoPauseMinimized).onChange(async (value) => {
         if (value != this.plugin.settings.autoPauseMinimized) {
           this.plugin.settings.autoPauseMinimized = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
         }
       }),
     )
@@ -1275,7 +1276,7 @@ export class SettingTab extends PluginSettingTab {
       toggle.setValue(this.plugin.settings.mobileBlurPauseEnabled).onChange(async (value) => {
         if (value != this.plugin.settings.mobileBlurPauseEnabled) {
           this.plugin.settings.mobileBlurPauseEnabled = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
         }
       }),
     )
@@ -1353,7 +1354,7 @@ export class SettingTab extends PluginSettingTab {
           const numValue = parseInt(value)
           if (!isNaN(numValue) && numValue >= 0) {
             this.plugin.settings.syncUpdateDelay = numValue
-            await (this.plugin as any).saveSettings()
+            await this.plugin.saveSettings()
           }
         }),
     )
@@ -1382,7 +1383,7 @@ export class SettingTab extends PluginSettingTab {
       toggle.setValue(this.plugin.settings.cloudPreviewEnabled).onChange(async (value) => {
         if (value != this.plugin.settings.cloudPreviewEnabled) {
           this.plugin.settings.cloudPreviewEnabled = value
-          await (this.plugin as any).saveSettings()
+          await this.plugin.saveSettings()
           this.display()
         }
       }),
@@ -1394,7 +1395,7 @@ export class SettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.cloudPreviewTypeRestricted).onChange(async (value) => {
           if (value != this.plugin.settings.cloudPreviewTypeRestricted) {
             this.plugin.settings.cloudPreviewTypeRestricted = value
-            await (this.plugin as any).saveSettings()
+            await this.plugin.saveSettings()
           }
         }),
       )
@@ -1407,7 +1408,7 @@ export class SettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             if (value != this.plugin.settings.cloudPreviewRemoteUrl) {
               this.plugin.settings.cloudPreviewRemoteUrl = value
-              await (this.plugin as any).saveSettings()
+              await this.plugin.saveSettings()
             }
           })
           .inputEl.addClass("fast-note-sync-remote-url-area"),
@@ -1420,7 +1421,7 @@ export class SettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.cloudPreviewAutoDeleteLocal).onChange(async (value) => {
           if (value != this.plugin.settings.cloudPreviewAutoDeleteLocal) {
             this.plugin.settings.cloudPreviewAutoDeleteLocal = value
-            await (this.plugin as any).saveSettings()
+            await this.plugin.saveSettings()
           }
         }),
       )
@@ -1433,11 +1434,13 @@ export class SettingTab extends PluginSettingTab {
     if (descEl) {
       descEl.empty()
       descEl.addClass("fns-setting-desc-markdown")
-      MarkdownRenderer.render(this.app, desc, descEl, "", this.plugin)
+      // 动态替换配置目录占位符 / Dynamically replace config directory placeholder
+      const finalDesc = desc.replace(/\$\{configDir\}/g, this.app.vault.configDir);
+      MarkdownRenderer.render(this.app, finalDesc, descEl, "", this.plugin)
     }
   }
 
-  private addRuleSetting(set: HTMLElement, name: string, desc: string, getRules: () => SyncRule[], onSave: (rules: SyncRule[]) => Promise<void>, showCaseSensitive: boolean = true, addButtonText?: string, inputPlaceholder?: string, editButtonText?: string, usePathSuggest: boolean = false, pathSuggestOptions: unknown = {}) {
+  private addRuleSetting(set: HTMLElement, name: string, desc: string, getRules: () => SyncRule[], onSave: (rules: SyncRule[]) => Promise<void>, showCaseSensitive: boolean = true, addButtonText?: string, inputPlaceholder?: string, editButtonText?: string, usePathSuggest: boolean = false, pathSuggestOptions: PathSuggestOptions = {}) {
     const setting = new Setting(set).setName(name).setClass("fns-setting-item-vertical")
     this.setDescWithBreaks(set.lastElementChild as HTMLElement, desc)
 

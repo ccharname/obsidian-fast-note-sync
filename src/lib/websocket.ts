@@ -145,7 +145,7 @@ export class WebSocketClient {
       this.count++
       this.plugin.app.saveLocalStorage(getWsCountStorageKey(this.plugin), this.count.toString())
 
-      this.ws.onerror = (error) => {
+      this.ws.onerror = (error: Event) => {
         dump("WebSocket error:", {
           timestamp: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
           url: wsUrl,
@@ -172,7 +172,7 @@ export class WebSocketClient {
         this.Send("Authorization", this.plugin.settings.apiToken)
         dump("Service authorization")
       }
-      this.ws.onclose = (e) => {
+      this.ws.onclose = (e: CloseEvent) => {
         this.isAuth = false
         this.isOpen = false
         this.notifyStatusChange(false)
@@ -206,7 +206,7 @@ export class WebSocketClient {
         this.plugin.concurrencyManager.clear()
         dump("Service close")
       }
-      this.ws.onmessage = (event) => {
+      this.ws.onmessage = (event: MessageEvent) => {
         // 处理二进制消息(文件分片下载)
 
         if (event.data instanceof ArrayBuffer || event.data instanceof Blob) {
@@ -254,7 +254,13 @@ export class WebSocketClient {
           msgData = event.data.slice(index + 1)
           msgAction = event.data.slice(0, index)
         }
-        const data = JSON.parse(msgData)
+        const data = JSON.parse(msgData) as { 
+          code: number; 
+          message?: string; 
+          details?: string; 
+          data?: Record<string, any>; // data 内部仍可能有多变结构
+          vault?: string;
+        }
 
         // 记录接收到的消息
         if (msgAction) {
@@ -304,10 +310,10 @@ export class WebSocketClient {
               const pluginIsNew = (data.data.pluginVersionIsNew ?? this.plugin.localStorageManager.getMetadata("pluginVersionIsNew") as boolean) && isVersionNew(pluginCurrent, pluginLatest);
               this.plugin.localStorageManager.setMetadata("pluginVersionIsNew", pluginIsNew)
 
-              this.plugin.localStorageManager.setMetadata("pluginVersionNewName", data.data.pluginVersionNewName ?? this.plugin.localStorageManager.getMetadata("pluginVersionNewName"))
-              this.plugin.localStorageManager.setMetadata("pluginVersionNewLink", data.data.pluginVersionNewLink ?? this.plugin.localStorageManager.getMetadata("pluginVersionNewLink"))
-              this.plugin.localStorageManager.setMetadata("pluginVersionNewChangelogContent", data.data.pluginVersionNewChangelogContent ?? this.plugin.localStorageManager.getMetadata("pluginVersionNewChangelogContent"))
-              this.plugin.localStorageManager.setMetadata("pluginVersionChangelogContent", data.data.pluginVersionChangelogContent ?? this.plugin.localStorageManager.getMetadata("pluginVersionChangelogContent"))
+              this.plugin.localStorageManager.setMetadata("pluginVersionNewName", (data.data.pluginVersionNewName as string) ?? this.plugin.localStorageManager.getMetadata("pluginVersionNewName"))
+              this.plugin.localStorageManager.setMetadata("pluginVersionNewLink", (data.data.pluginVersionNewLink as string) ?? this.plugin.localStorageManager.getMetadata("pluginVersionNewLink"))
+              this.plugin.localStorageManager.setMetadata("pluginVersionNewChangelogContent", (data.data.pluginVersionNewChangelogContent as string) ?? this.plugin.localStorageManager.getMetadata("pluginVersionNewChangelogContent"))
+              this.plugin.localStorageManager.setMetadata("pluginVersionChangelogContent", (data.data.pluginVersionChangelogContent as string) ?? this.plugin.localStorageManager.getMetadata("pluginVersionChangelogContent"))
               this.plugin.menuManager?.refreshUpgradeBadge();
             }
           }
@@ -327,9 +333,6 @@ export class WebSocketClient {
 
           if (typeof data === 'object' && 'vault' in data && data.vault != null && data.vault != this.plugin.settings.vault) {
             dump("Service vault " + data.vault + " not match " + this.plugin.settings.vault)
-            return
-          }
-          if (data.code == "") {
             return
           }
           const handler = receiveOperators.get(msgAction)
@@ -439,7 +442,7 @@ export class WebSocketClient {
 
     if (this.plugin.settings.startupDelay > 0) {
       dump(`Startup delay: ${this.plugin.settings.startupDelay}ms`)
-      await new Promise((resolve) => setTimeout(resolve, this.plugin.settings.startupDelay))
+      await new Promise((resolve) => window.setTimeout(resolve, this.plugin.settings.startupDelay))
     }
 
     if (handleId !== this.currentStartHandleId) {
@@ -461,7 +464,7 @@ export class WebSocketClient {
           showSyncNotice("文件哈希管理器初始化超时,同步可能不稳定")
           break
         }
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise((resolve) => window.setTimeout(resolve, 100))
       }
 
       if (this.plugin.fileHashManager && this.plugin.fileHashManager.isReady()) {
@@ -519,7 +522,7 @@ export class WebSocketClient {
     }
 
     while (this.ws.bufferedAmount > maxBufferSize) {
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await new Promise(resolve => window.setTimeout(resolve, 50))
     }
   }
 
