@@ -8,6 +8,7 @@
     "devts": "node esbuild.config.mjs",
     "devcss": "sass --watch src/styles.scss styles.css && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test:auth": "node tests/websocket-auth-error.test.mjs",
     "ver": "node ./scripts/update-version.js",
     "dist": "npx tsx scripts/copy-dist.ts",
     "translate": "node scripts/translate-i18n.mjs --model Qwen/Qwen3.6-35B-A3B",

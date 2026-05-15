@@ -11,8 +11,46 @@ import { $ } from "../i18n/lang";
 // 冲突相关错误码
 const ERROR_SYNC_CONFLICT = 530
 
+const AUTH_ERROR_REIMPORT_CODES = new Set([307, 308, 309, 310])
 
+const AUTH_ERROR_FALLBACK_MESSAGES: Record<number, string> = {
+  307: "Authorization token is missing",
+  308: "Session expired or token has been revoked",
+  309: "Authorization token is invalid or incomplete",
+  310: "Authorization token has expired",
+  312: "Authorization token is restricted by IP",
+  313: "Authorization token is restricted by user agent",
+  314: "Authorization token is restricted by client",
+  315: "Authorization token scope is restricted",
+}
 
+function normalizeNoticeValue(value: unknown): string {
+  if (value == null) return ""
+  if (Array.isArray(value)) {
+    return value
+      .map(item => normalizeNoticeValue(item))
+      .filter(Boolean)
+      .join(", ")
+  }
+
+  const text = String(value).trim()
+  return text === "undefined" ? "" : text
+}
+
+export function formatAuthorizationError(data: { code: number; message?: unknown; details?: unknown }): string {
+  const message = normalizeNoticeValue(data.message) || AUTH_ERROR_FALLBACK_MESSAGES[data.code] || "Authorization failed"
+  const details = normalizeNoticeValue(data.details)
+  const detailsText = details ? " Details=" + details : ""
+  const authFailureText = (message + " " + details).toLowerCase()
+  const needsReimportHint = AUTH_ERROR_REIMPORT_CODES.has(data.code) ||
+    authFailureText.includes("rotated") ||
+    authFailureText.includes("revoked") ||
+    authFailureText.includes("no longer exists") ||
+    authFailureText.includes("missing")
+  const hint = needsReimportHint ? " Hint=Please re-import the API configuration from the management console." : ""
+
+  return "Service Authorization Error: Code=" + data.code + " Msg=" + message + detailsText + hint
+}
 
 // WebSocket 连接常量
 const RECONNECT_BASE_DELAY = 3000 // 重连基础延迟 (毫秒)
@@ -270,9 +308,7 @@ export class WebSocketClient {
 
         if (msgAction == "Authorization") {
           if (data.code <= 0 || data.code >= 300) {
-            const errorMsg = data.message || "";
-            const errorDetails = data.details ? " Details=" + data.details : "";
-            showSyncNotice("Service Authorization Error: Code=" + data.code + " Msg=" + errorMsg + errorDetails)
+            showSyncNotice(formatAuthorizationError(data), 6000)
             return
           } else {
             this.isAuth = true
