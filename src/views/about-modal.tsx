@@ -239,7 +239,7 @@ const AboutView = ({ plugin, type, closeModal }: { plugin: FastSync; type: 'plug
                     }
                 }
 
-                await plugin.app.vault.adapter.writeBinary(path, content.buffer);
+                await plugin.app.vault.adapter.writeBinary(path, content.buffer as ArrayBuffer);
             }
 
             dump("Plugin upgrade completed successfully, starting hot reload...");

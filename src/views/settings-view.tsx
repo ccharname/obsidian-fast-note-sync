@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { KofiImage, WXImage } from "src/lib/icons";
-import { dump } from "src/lib/helps";
+import { dump, showSyncNotice } from "src/lib/helps";
 import { setIcon } from "obsidian";
 import FastSync from "src/main";
 
@@ -197,6 +197,7 @@ const SupportList = ({ plugin }: { plugin: FastSync }) => {
   const [pager, setPager] = useState<SupportPager>({ page: 1, pageSize: 10, totalRows: 0 });
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState("amount_3m");
+  const [hoverTooltip, setHoverTooltip] = useState<{text: string, x: number, y: number, isMobile: boolean} | null>(null);
 
   const fetchRecords = useCallback(async (page = 1, sort = sortBy) => {
     setLoading(true);
@@ -278,7 +279,25 @@ const SupportList = ({ plugin }: { plugin: FastSync }) => {
         <>
           <div className="fns-supporters-container">
             {records.map((record, idx) => (
-              <div key={idx} className="fns-support-row">
+              <div 
+                key={idx} 
+                className="fns-support-row" 
+                onPointerEnter={(e) => {
+                  if (e.pointerType === 'touch') return;
+                  const msg = `${record.name || "Anonymous"}${record.message ? ': ' + record.message : ''}`;
+                  setHoverTooltip({ text: msg, x: e.clientX, y: e.clientY, isMobile: false });
+                }}
+                onPointerMove={(e) => {
+                  if (e.pointerType === 'touch') return;
+                  setHoverTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY, isMobile: false } : null);
+                }}
+                onPointerLeave={() => setHoverTooltip(null)}
+                onPointerDown={(e) => {
+                  if (e.pointerType !== 'touch') return;
+                  const msg = `${record.name || "Anonymous"}${record.message ? ': ' + record.message : ''}`;
+                  showSyncNotice(msg, 4000);
+                }}
+              >
                 {/* Date */}
                 <div className="fns-support-date">
                   {(record.time || "").split(' ')[0].substring(2) || "N/A"}
@@ -329,6 +348,23 @@ const SupportList = ({ plugin }: { plugin: FastSync }) => {
               </button>
             </div>
           </div>
+          {hoverTooltip && (
+            <div 
+              className="fns-fast-tooltip" 
+              style={hoverTooltip.isMobile ? {
+                left: '50%',
+                top: hoverTooltip.y + 40,
+                transform: 'translateX(-50%)',
+                maxWidth: '90vw',
+                width: 'max-content'
+              } : {
+                left: hoverTooltip.x + 15,
+                top: hoverTooltip.y + 15
+              }}
+            >
+              {hoverTooltip.text}
+            </div>
+          )}
         </>
       )}
     </>
