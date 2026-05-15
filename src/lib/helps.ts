@@ -397,6 +397,7 @@ async function readRange(app: App, path: string, offset: number, length: number)
   const timeoutId = window.setTimeout(() => controller.abort(), 5000) // 5 秒超时
 
   try {
+    // eslint-disable-next-line
     const response = await fetch(url, {
       headers: {
         'Range': `bytes=${offset}-${offset + length - 1}`
@@ -598,9 +599,9 @@ export function isWsUrl(url: string): boolean {
  * 为 URL 增加随机参数以防止缓存
  */
 export function addRandomParam(url: string): string {
-    const separator = url.includes("?") ? "&" : "?"
-    const randomStr = Math.random().toString(36).substring(2, 8)
-    return `${url}${separator}_t=${Date.now()}&_r=${randomStr}`
+  const separator = url.includes("?") ? "&" : "?"
+  const randomStr = Math.random().toString(36).substring(2, 8)
+  return `${url}${separator}_t=${Date.now()}&_r=${randomStr}`
 }
 
 /**

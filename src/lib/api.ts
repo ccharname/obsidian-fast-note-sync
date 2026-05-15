@@ -152,6 +152,7 @@ export class HttpApiService {
 
         try {
             // 开启了自动重定向检测：使用 fetch 探测以获取 301/302 后的最终路径
+            // eslint-disable-next-line
             const res = await fetch(probeUrl, {
                 method: 'GET',
                 redirect: 'follow',
@@ -281,7 +282,7 @@ export class HttpApiService {
 
         if (networkLibrary === 'requestUrl') {
             try {
-                // Obsidian's requestUrl doesn't natively support AbortSignal in older versions, 
+                // Obsidian's requestUrl doesn't natively support AbortSignal in older versions,
                 // but we check for it to be future-proof or just let it run.
                 const response = await requestUrl({
                     url: url,
@@ -307,7 +308,7 @@ export class HttpApiService {
                 redirect: "follow",
                 signal: options.signal
             };
-
+            // eslint-disable-next-line
             const res = await fetch(url, fetchOptions);
             let json: unknown = null;
             try {
