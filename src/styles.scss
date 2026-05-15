@@ -1004,7 +1004,7 @@
       align-items: center;
       justify-content: center;
       height: 28px;
-      
+
       &.is-active {
         color: var(--interactive-accent);
         background-color: var(--background-modifier-hover);
@@ -1075,7 +1075,7 @@
             border-radius: 50%;
             border: 1px solid var(--background-modifier-border);
             flex-shrink: 0;
-            
+
             &.fns-dot-note { background-color: #08b94e; }
             &.fns-dot-attachment { background-color: #7C4DFF; }
             &.fns-dot-folder { background-color: #1E88E5; }
@@ -1309,7 +1309,7 @@
         color: var(--interactive-accent);
         transform: translateY(-1px);
       }
-      
+
       &:active:not(:disabled) {
         transform: translateY(0);
       }
@@ -1322,7 +1322,7 @@
       font-size: 12px;
       font-weight: 600;
       color: var(--text-muted);
-      
+
       .page-current {
         color: var(--text-normal);
         background-color: var(--background-secondary-alt);
@@ -1331,12 +1331,12 @@
         min-width: 24px;
         text-align: center;
       }
-      
+
       .page-separator {
         color: var(--text-faint);
         font-weight: normal;
       }
-      
+
       .page-total {
         color: var(--text-faint);
       }
@@ -2029,7 +2029,7 @@ body .suggestion-container {
     font-weight: 600;
     line-height: 1.3;
   }
-  
+
   h1 { font-size: 1.3em; }
   h2 { font-size: 1.2em; border-bottom: 1px solid var(--background-modifier-border-faint); padding-bottom: 0.3em; }
   h3 { font-size: 1.1em; }
@@ -2840,7 +2840,7 @@ body .suggestion-container {
   font-size: 1.1em;
   font-weight: 600;
   color: var(--text-normal);
-  
+
   .fns-share-title-icon {
     display: flex;
     align-items: center;
@@ -2851,7 +2851,7 @@ body .suggestion-container {
     color: var(--interactive-accent);
     border-radius: 6px;
     border: 1px solid var(--background-modifier-border);
-    
+
     svg {
       width: 18px;
       height: 18px;
@@ -2879,14 +2879,14 @@ body .suggestion-container {
   font-size: 0.85em;
   color: var(--text-muted);
   margin-bottom: 8px;
-  
+
   .fns-file-icon {
     display: flex;
     align-items: center;
     color: var(--interactive-accent);
     opacity: 0.7;
   }
-  
+
   span {
     white-space: nowrap;
     overflow: hidden;
@@ -2917,19 +2917,19 @@ body .suggestion-container {
   display: flex;
   align-items: center;
   gap: 6px;
-  
+
   .fns-header-icon {
     display: flex;
     align-items: center;
     color: var(--interactive-accent);
     opacity: 0.8;
-    
+
     svg {
       width: 14px;
       height: 14px;
     }
   }
-  
+
   .fns-header-title {
     font-size: 0.82em;
     font-weight: 600;
@@ -2963,14 +2963,14 @@ body .suggestion-container {
       font-size: 0.9em;
       transition: all 0.2s ease;
       box-sizing: border-box;
-      
+
       &:focus {
         border-color: var(--interactive-accent);
         background-color: var(--background-primary);
         box-shadow: 0 0 0 2px rgb(var(--interactive-accent-rgb), 0.1);
       }
     }
-    
+
     .fns-input-action-btn {
       position: absolute;
       right: 4px;
@@ -2986,7 +2986,7 @@ body .suggestion-container {
       color: var(--text-muted);
       opacity: 0.5;
       transition: all 0.2s ease;
-      
+
       &:hover {
         opacity: 1;
         color: var(--interactive-accent);
@@ -3007,13 +3007,13 @@ body .suggestion-container {
   border-radius: 8px;
   flex-shrink: 0;
   transition: all 0.2s ease;
-  
+
   &.is-dirty {
     background-color: var(--interactive-accent);
     color: white;
     border-color: var(--interactive-accent);
     box-shadow: 0 4px 10px rgb(var(--interactive-accent-rgb), 0.3);
-    
+
     &:hover {
       filter: brightness(1.1);
     }
@@ -3035,7 +3035,7 @@ body .suggestion-container {
   align-items: center;
   padding-top: 10px;
   margin-top: 4px;
-  
+
   .fns-share-status-tip {
     display: flex;
     align-items: center;
@@ -3043,7 +3043,7 @@ body .suggestion-container {
     font-size: 0.9em;
     font-weight: 500;
     color: var(--text-accent);
-    
+
     svg {
       color: var(--text-accent);
       animation: fns-breathing 2s infinite ease-in-out;
@@ -3070,11 +3070,11 @@ body .suggestion-container {
     color: white;
     border-color: var(--text-error);
   }
-  
+
   &:active {
     opacity: 0.8;
   }
-  
+
   svg {
     width: 16px;
     height: 16px;
@@ -3090,7 +3090,7 @@ body .suggestion-container {
   justify-content: center;
   padding: 40px;
   gap: 12px;
-  
+
   .fns-spinner {
     width: 24px;
     height: 24px;
@@ -3099,7 +3099,7 @@ body .suggestion-container {
     border-radius: 50%;
     animation: rotate 1s linear infinite;
   }
-  
+
   .fns-loading-text {
     font-size: 0.9em;
     color: var(--text-muted);
@@ -3116,7 +3116,7 @@ body .suggestion-container {
   background-color: var(--background-secondary);
   border: 1px dashed var(--background-modifier-border);
   border-radius: 16px;
-  
+
   .fns-empty-icon {
     color: var(--text-faint);
     opacity: 0.5;
@@ -3126,12 +3126,12 @@ body .suggestion-container {
       height: 48px;
     }
   }
-  
+
   .fns-empty-text {
     font-size: 0.95em;
     color: var(--text-muted);
   }
-  
+
   .fns-share-create-btn {
     margin-top: 8px;
     height: 40px;
@@ -3200,7 +3200,7 @@ body .suggestion-container {
 .fns-debug-log-item {
   padding: 2px 0;
   border-bottom: 1px solid var(--background-modifier-border-faint);
-  
+
   &:last-child {
     border-bottom: none;
   }
@@ -3340,6 +3340,7 @@ body .suggestion-container {
   flex-direction: column;
   gap: 12px;
 
+
   .fns-supporters-list-header {
     display: flex;
     align-items: center;
@@ -3353,6 +3354,10 @@ body .suggestion-container {
       font-weight: 600;
       font-size: 1.1em;
       color: var(--text-normal);
+
+      svg {
+        color: #ffd700;
+      }
 
       .fns-supporters-title {
         display: flex;
@@ -3512,32 +3517,45 @@ body .suggestion-container {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    margin-top: 8px;
-    font-size: 11px;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 10px;
     color: var(--text-faint);
+    opacity: 0.8;
 
     button {
-      padding: 4px 8px;
-      height: 24px;
-      min-height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      width: 22px;
+      height: 22px;
+      min-height: 22px;
       background: transparent !important;
       border: 1px solid var(--background-modifier-border-faint) !important;
       border-radius: 4px;
       cursor: pointer;
       box-shadow: none !important;
-      font-size: 11px;
       margin: 0 !important;
+      transition: all 0.2s;
 
       &:disabled {
-        opacity: 0.4;
+        opacity: 0.3;
         cursor: not-allowed;
       }
 
       &:hover:not(:disabled) {
         background-color: var(--background-modifier-hover) !important;
         border-color: var(--background-modifier-border) !important;
+        color: var(--text-normal);
       }
+    }
+
+    span {
+      min-width: 20px;
+      text-align: center;
+      font-weight: 600;
+      font-family: var(--font-monospace);
     }
   }
 
