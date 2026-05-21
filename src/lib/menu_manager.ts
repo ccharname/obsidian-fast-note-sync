@@ -414,6 +414,7 @@ export class MenuManager {
    * Set sync status → toggle color animation
    */
   setSyncStatus(syncing: boolean) {
+    if (!this.plugin.settings.showSyncIndicator) return;
     // 同步处理 ribbon 图标和 view-actions 按钮 / Handle both ribbon icon and view-actions buttons
     [this.ribbonIcon, ...Array.from(activeDocument.querySelectorAll('.fns-status-action'))].forEach(el => {
       if (!el) return;

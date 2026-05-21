@@ -103,6 +103,8 @@ export default {
   "setting.general.show_share_icon_desc": "활성화하면 <b>네이티브 파일 관리자</b> 및 <b>Notebook Navigator</b> 서드파티 플러그인에서 공유된 노트의 아이콘을 표시합니다.",
   "setting.general.show_upgrade_badge": "메인 화면에 업데이트 배지 표시",
   "setting.general.show_upgrade_badge_desc": "활성화하면 플러그인이나 서버에 새 버전이 있을 때 사이드바, 모바일 상단 바 및 동기화 로그 아이콘에 빨간 점 알림이 표시됩니다.",
+  "setting.display.show_sync_indicator": "동기화 상태 표시기 표시",
+  "setting.display.show_sync_indicator_desc": "활성화하면 데이터 전송 중에 아이콘 버튼 오른쪽 하단에 회전 아이콘이 표시됩니다.",
   "setting.sync.config_dirs": "설정 동기화-추가 디렉토리 동기화",
   "setting.sync.config_dirs_desc": "핵심 설정 동기화基礎上, 동기화할 특수 디렉토리를 추가합니다 (<b>.</b>로 시작해야 합니다).\n주의: <b>.</b>로 시작하지 않는 경로는 자동으로 무시되며, 이러한 디렉토리의 모든 파일이 동기화에 참여합니다. 예: .claude.",
   "setting.sync.config_dirs_placeholder": "추가 동기화할 디렉토리 경로를 입력하세요. . 로 시작해야 합니다. 예: .claude",

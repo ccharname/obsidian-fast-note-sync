@@ -427,6 +427,9 @@ export class WebSocketClient {
   private cleanupWebSocket(ws: WebSocket) {
     if (!ws) return;
 
+    // 清理残留并发槽位 / Clear stale concurrency slots
+    this.plugin.concurrencyManager.clear();
+
     // Remove listeners to prevent "ghost" events
     ws.onopen = null;
     ws.onmessage = null;

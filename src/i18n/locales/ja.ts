@@ -103,6 +103,8 @@ export default {
   "setting.general.show_share_icon_desc": "有効にすると、<b>ネイティブファイルマネージャー</b> および <b>Notebook Navigator</b> サードパーティプラグインで、共有済みのノートのアイコンが表示されます。",
   "setting.general.show_upgrade_badge": "メイン画面に更新の赤い点を表示",
   "setting.general.show_upgrade_badge_desc": "有効にすると、プラグインまたはサーバーに新しいバージョンがある場合、サイドバー、モバイル端末の上部バー、および同期ログアイコンに赤い点の通知を表示します。",
+  "setting.display.show_sync_indicator": "同期状態インジケーターを表示",
+  "setting.display.show_sync_indicator_desc": "有効にすると、データ転送中にアイコンボタンの右下に回転アイコンが表示されます。",
   "setting.sync.config_dirs": "設定同期 - 追加ディレクトリの同期",
   "setting.sync.config_dirs_desc": "コア設定の同期に加えて、同期が必要な特殊ディレクトリを追加します（<b>.</b> で始まる必要があります）。\n注意：<b>.</b> で始まらないパスは自動的に無視され、これらのディレクトリ内のすべてのファイルが同期に参加します。例：.claude。",
   "setting.sync.config_dirs_placeholder": "追加で同期するディレクトリパスを入力してください。<b>.</b> で始まる必要があります。例：.claude",

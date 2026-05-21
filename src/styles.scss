@@ -79,6 +79,39 @@
   }
 }
 
+/* 设置页同步指示器预览 / Settings page sync indicator preview */
+.fns-sync-indicator-preview {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  vertical-align: middle;
+  height: 1.1em;
+
+  .fns-ribbon-container {
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  .fns-sync-spinner {
+    top: calc(50% + 2px);
+    left: calc(50% + 4px);
+
+    svg {
+      animation: none;
+      width: 5.6px;
+      height: 5.6px;
+    }
+  }
+}
+
 .fns-modal-warning-message {
   color: var(--text-error);
   margin-bottom: 20px;

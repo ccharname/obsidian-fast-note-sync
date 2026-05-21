@@ -103,6 +103,8 @@ export default {
   "setting.general.show_share_icon_desc": "開啟後，在 <b>原生檔案管理器</b> 和 <b>Notebook Navigator</b> 三方外掛中顯示已分享筆記的圖示。",
   "setting.general.show_upgrade_badge": "主介面顯示更新紅點",
   "setting.general.show_upgrade_badge_desc": "開啟後，當外掛或伺服器端有新版本時，在側邊欄、行動裝置頂部欄位及同步日誌圖示上顯示紅點提示。",
+  "setting.display.show_sync_indicator": "顯示同步狀態指示器",
+  "setting.display.show_sync_indicator_desc": "開啟後，數據傳輸時會在本圖示按鈕右下角顯示旋轉圖示。",
   "setting.sync.config_dirs": "配置同步-增加目錄同步",
   "setting.sync.config_dirs_desc": "在核心配置同步基礎上，增加需要同步的特殊目錄（必須以 <b>.</b> 開頭）。\n注意：不以 <b>.</b> 開頭的路徑將被自動忽略，這些目錄下的所有檔案都將參與同步，例如：.claude。",
   "setting.sync.config_dirs_placeholder": "輸入需要增加同步的目錄路徑，必須以 . 開頭，如：.claude",

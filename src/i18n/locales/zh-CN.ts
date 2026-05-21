@@ -103,6 +103,8 @@ export default {
   "setting.general.show_share_icon_desc": "开启后，在 <b>原生文件管理器</b> 和 <b>Notebook Navigator</b> 三方插件中显示已分享笔记的图标。",
   "setting.general.show_upgrade_badge": "主界面显示更新红点",
   "setting.general.show_upgrade_badge_desc": "开启后，当插件或服务端有新版本时，在侧边栏、移动端顶栏及同步日志图标上显示红点提示。",
+  "setting.display.show_sync_indicator": "显示同步状态指示器",
+  "setting.display.show_sync_indicator_desc": "开启后，数据传输时会在图标按钮右下角显示旋转图标。",
   "setting.sync.config_dirs": "配置同步-增加目录同步",
   "setting.sync.config_dirs_desc": "在核心配置同步基础上，增加需要同步的特殊目录（必须以 <b>.</b> 开头）。\n注意：不以 <b>.</b> 开头的路径将被自动忽略，这些目录下的所有文件都将参与同步，例如：.claude。",
   "setting.sync.config_dirs_placeholder": "输入需要增加同步的目录路径，必须以 . 开头，如：.claude",

@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Platform, SearchComponent, MarkdownRenderer, Component, requestUrl, Modal } from "obsidian";
+import { App, PluginSettingTab, Setting, Platform, SearchComponent, MarkdownRenderer, Component, requestUrl, Modal, setIcon } from "obsidian";
 import { createRoot, Root } from "react-dom/client";
 import { unzipSync } from "fflate";
 
@@ -86,6 +86,8 @@ export interface PluginSettings {
   maxConcurrentUploads: number
   /** 是否在状态栏显示并发控制图标 */
   showConcurrencyIndicator: boolean
+  /** 是否显示同步状态指示器（旋转图标）/ Whether to show sync status indicator (spinning icon) */
+  showSyncIndicator: boolean
   /** 是否自动检测 API 跳转 (301/302) */
   autoRedirectEnabled: boolean
   /** 是否在WS连接前进行探测 */
@@ -144,6 +146,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   concurrencyControlEnabled: false,
   maxConcurrentUploads: 20,
   showConcurrencyIndicator: true,
+  showSyncIndicator: false,
   autoRedirectEnabled: false,
   wsPreProbeEnabled: true,
   // 手机 110，平板 126，与 CSS 硬编码值一致 / Phone 110, tablet 126, matches CSS defaults
@@ -1065,6 +1068,23 @@ export class SettingTab extends PluginSettingTab {
       }),
     )
     this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.general.show_upgrade_badge_desc"))
+
+    // 同步状态指示器 / Sync status indicator
+    const syncSetting = new Setting(set).setName($("setting.display.show_sync_indicator")).setClass("fns-setting-item-checkbox").addToggle((toggle) =>
+      toggle.setValue(this.plugin.settings.showSyncIndicator).onChange(async (value) => {
+        this.plugin.settings.showSyncIndicator = value
+        await this.plugin.saveSettings()
+      }),
+    )
+    // 在标签右侧嵌入合成图标的静态预览 / Embed static composite icon preview next to label
+    const preview = syncSetting.nameEl.createDiv("fns-sync-indicator-preview")
+    const previewContainer = preview.createDiv("fns-ribbon-container")
+    setIcon(previewContainer, "wifi")
+    const previewSpinner = previewContainer.createDiv("fns-sync-spinner")
+    previewSpinner.classList.add("fns-sync-preview")
+    setIcon(previewSpinner, "refresh-cw")
+    const syncDescEl = set.lastElementChild as HTMLElement
+    this.setDescWithBreaks(syncDescEl, $("setting.display.show_sync_indicator_desc"))
 
     new Setting(set).setName($("setting.sync.show_concurrency_indicator")).setClass("fns-setting-item-checkbox").addToggle((toggle) =>
       toggle.setValue(this.plugin.settings.showConcurrencyIndicator).onChange(async (value) => {
