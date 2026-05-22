@@ -826,26 +826,34 @@ export default class FastSync extends Plugin {
   }
 
   async activateLogView() {
-    const { workspace } = this.app
-
-    const leaves = workspace.getLeavesOfType(SYNC_LOG_VIEW_TYPE)
+    const { workspace } = this.app;
+    const rightSplit = workspace.rightSplit;
+    const leaves = workspace.getLeavesOfType(SYNC_LOG_VIEW_TYPE);
 
     if (leaves.length > 0) {
-      const leaf = leaves[0]
-      // 如果已经打开，判断是否处于当前视图且可见，如果是则关闭
-      const containerEl = leaf.view.containerEl as HTMLElement & { isShown(): boolean };
-      if (leaf === workspace.getMostRecentLeaf() || containerEl.isShown()) {
-        leaf.detach()
-        return
+      const leaf = leaves[0];
+      // 检查当前日志面板是否处于完全可见状态：1. 右侧边栏未折叠 2. 日志视图的容器元素在 DOM 中是显示状态
+      // Check if the current log panel is fully visible: 1. Right sidebar is not collapsed 2. The log view's container element is shown in the DOM
+      const isVisible = !rightSplit.collapsed && leaf.view.containerEl.isShown();
+
+      if (isVisible) {
+        // 如果已经显示且处于活动状态，则折叠右侧栏以“隐藏”它，避免销毁视图保留 React 状态
+        // If already visible and active, collapse the right sidebar to "hide" it, keeping React state without destroying the view
+        rightSplit.collapse();
+      } else {
+        // 如果被遮挡或右侧栏已折叠，则重新激活并展开右侧栏
+        // If hidden by other tabs or the right sidebar is collapsed, reveal it and expand right sidebar
+        workspace.revealLeaf(leaf);
+        rightSplit.expand();
       }
-      // 否则显示它
-      void workspace.revealLeaf(leaf)
     } else {
-      // 否则创建新的
-      const leaf = workspace.getRightLeaf(false)
-      await leaf?.setViewState({ type: SYNC_LOG_VIEW_TYPE, active: true })
+      // 否则创建新的叶子节点，设置视图状态，并展开右侧栏
+      // Otherwise, create a new leaf, set view state, and expand the right sidebar
+      const leaf = workspace.getRightLeaf(false);
+      await leaf?.setViewState({ type: SYNC_LOG_VIEW_TYPE, active: true });
       if (leaf) {
-        void workspace.revealLeaf(leaf)
+        workspace.revealLeaf(leaf);
+        rightSplit.expand();
       }
     }
   }
