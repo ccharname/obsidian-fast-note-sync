@@ -102,6 +102,10 @@ export interface PluginSettings {
   binarySyncLimitEnabled: boolean
   /** 是否启用 Protobuf 协议进行消息同步 */
   protobufEnabled: boolean
+  /** 笔记同步大小限制 (MB) / Note sync size limit (MB) */
+  noteSyncLimit: number
+  /** 附件同步大小限制 (MB) / Attachment sync size limit (MB) */
+  attachmentSyncLimit: number
 }
 
 /**
@@ -159,6 +163,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   mobileBlurPauseEnabled: true,
   binarySyncLimitEnabled: true,
   protobufEnabled: true,
+  noteSyncLimit: 20,
+  attachmentSyncLimit: 50,
 }
 
 export type TabId = "GENERAL" | "DISPLAY" | "SHORTCUT" | "REMOTE" | "SYNC" | "CLOUD" | "DEBUG"
@@ -1530,11 +1536,42 @@ export class SettingTab extends PluginSettingTab {
       toggle.setValue(this.plugin.settings.binarySyncLimitEnabled).onChange(async (value) => {
         if (value != this.plugin.settings.binarySyncLimitEnabled) {
           this.plugin.settings.binarySyncLimitEnabled = value
+          this.refresh()
           await this.plugin.saveAndReloadServices("binarySyncLimitEnabled")
         }
       }),
     )
     this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.sync.binary_limit_desc"))
+
+    if (this.plugin.settings.binarySyncLimitEnabled) {
+      new Setting(set).setName($("setting.sync.attachment_limit")).addText((text) =>
+        text
+          .setPlaceholder("50")
+          .setValue((this.plugin.settings.attachmentSyncLimit ?? 50).toString())
+          .onChange(async (value) => {
+            const numValue = parseInt(value)
+            if (!isNaN(numValue) && numValue >= 0) {
+              this.plugin.settings.attachmentSyncLimit = numValue
+              await this.plugin.saveAndReloadServices()
+            }
+          }),
+      )
+      this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.sync.attachment_limit_desc"))
+    }
+
+    new Setting(set).setName($("setting.sync.note_limit")).addText((text) =>
+      text
+        .setPlaceholder("20")
+        .setValue((this.plugin.settings.noteSyncLimit ?? 20).toString())
+        .onChange(async (value) => {
+          const numValue = parseInt(value)
+          if (!isNaN(numValue) && numValue >= 0) {
+            this.plugin.settings.noteSyncLimit = numValue
+            await this.plugin.saveAndReloadServices()
+          }
+        }),
+    )
+    this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.sync.note_limit_desc"))
 
     new Setting(set).setName($("setting.sync.pdf_state")).setClass("fns-setting-item-checkbox").addToggle((toggle) =>
       toggle.setValue(this.plugin.settings.pdfSyncEnabled).onChange(async (value) => {

@@ -1,7 +1,7 @@
 import { TFolder, TFile, normalizePath } from "obsidian";
 
 import { receiveFileUpload, receiveFileSyncUpdate, receiveFileSyncDelete, receiveFileSyncMtime, receiveFileSyncChunkDownload, receiveFileSyncEnd, checkAndUploadAttachments, receiveFileSyncRename, receiveFileRenameAck, receiveFileUploadAck, receiveFileDeleteAck, isPluginUnloading } from "./operator_file";
-import { hashContent, hashContentAsync, dump, isPathExcluded, configIsPathExcluded, getConfigSyncCustomDirs, generateUUID, showSyncNotice, isLargeBinarySyncRisk, describeBinarySyncLimit, logMemorySnapshot, hashFileAsync, formatFileSize } from "../utils/helpers";
+import { hashContent, hashContentAsync, dump, isPathExcluded, configIsPathExcluded, getConfigSyncCustomDirs, generateUUID, showSyncNotice, isLargeBinarySyncRisk, describeBinarySyncLimit, hashFileAsync, formatFileSize } from "../utils/helpers";
 import { receiveConfigSyncModify, receiveConfigUpload, receiveConfigSyncMtime, receiveConfigSyncDelete, receiveConfigSyncEnd, configAllPaths, receiveConfigSyncClear, receiveConfigModifyAck, receiveConfigDeleteAck } from "./operator_config";
 import { receiveNoteSyncModify, receiveNoteUpload, receiveNoteSyncMtime, receiveNoteSyncDelete, receiveNoteSyncEnd, receiveNoteSyncRename, receiveNoteModifyAck, receiveNoteRenameAck, receiveNoteDeleteAck } from "./operator_note";
 import { SyncMode, SnapFile, SnapFolder, SyncEndData, PathHashFile, NoteSyncData, FileSyncData, ConfigSyncData, FolderSyncData } from "../utils/types";
@@ -569,8 +569,9 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
                 && plugin.fileHashManager.getPathHash(file.path) !== null
                 && !plugin.pendingNoteModifies.has(file.path)) continue;
 
-              // Skip excessively large .md files (>20MB)
-              if (file.stat.size > 20 * 1024 * 1024) continue;
+              // Skip excessively large .md files (>noteSyncLimit MB)
+              const noteLimit = (plugin.settings.noteSyncLimit ?? 20) * 1024 * 1024;
+              if (file.stat.size > noteLimit) continue;
 
               let contentHash = plugin.fileHashManager.getValidHash(file.path, file.stat.mtime, file.stat.size);
               if (contentHash === null) {
@@ -582,7 +583,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
                     new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(`Hash timeout`)), 15000))
                   ]);
                   plugin.scannedNoteHashes.set(file.path, { hash: contentHash, mtime: file.stat.mtime, size: file.stat.size });
-                } catch (e) {
+                } catch {
                   continue;
                 }
               }
@@ -599,7 +600,8 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
               });
             } else {
               if (isLargeBinarySyncRisk(file.stat.size, plugin)) continue;
-              if (file.stat.size > 50 * 1024 * 1024) continue;
+              const attachmentLimit = (plugin.settings.attachmentSyncLimit ?? 50) * 1024 * 1024;
+              if (file.stat.size > attachmentLimit) continue;
               const skipSync = plugin.settings.cloudPreviewEnabled && (!plugin.settings.cloudPreviewTypeRestricted || FileCloudPreview.isRestrictedType("." + file.extension));
               if (skipSync) continue;
 
@@ -618,7 +620,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
                     new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(`Hash timeout`)), 15000))
                   ]);
                   plugin.scannedFileHashes.set(file.path, { hash: contentHash, mtime: file.stat.mtime, size: file.stat.size });
-                } catch (e) {
+                } catch {
                   continue;
                 }
               }
@@ -635,7 +637,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
               });
             }
           }
-        } catch (e) {
+        } catch {
           continue;
         }
       }
@@ -748,7 +750,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
         const stat = await plugin.app.vault.adapter.stat(fullPath);
         if (!stat) continue;
         if (isLargeBinarySyncRisk(stat.size, plugin)) {
-          dump(`Skip scanning large config file (${describeBinarySyncLimit()} limit): ${path}`, stat.size);
+          dump(`Skip scanning large config file (${describeBinarySyncLimit(plugin)} limit): ${path}`, stat.size);
           continue;
         }
         if (isLoadLastTime && stat.mtime < Number(plugin.localStorageManager.getMetadata("lastConfigSyncTime"))) continue;

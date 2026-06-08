@@ -555,11 +555,13 @@ export const MAX_IN_MEMORY_FILE_SYNC_BYTES = 128 * 1024 * 1024
 
 export const isLargeBinarySyncRisk = function (size: number, plugin: FastSync): boolean {
   if (plugin.settings.binarySyncLimitEnabled === false) return false
-  return typeof size === "number" && size > MAX_IN_MEMORY_FILE_SYNC_BYTES
+  const limitMb = plugin.settings.attachmentSyncLimit ?? 50
+  return typeof size === "number" && size > limitMb * 1024 * 1024
 }
 
-export const describeBinarySyncLimit = function (): string {
-  return formatFileSize(MAX_IN_MEMORY_FILE_SYNC_BYTES)
+export const describeBinarySyncLimit = function (plugin?: FastSync): string {
+  const limitMb = plugin?.settings?.attachmentSyncLimit ?? 50
+  return formatFileSize(limitMb * 1024 * 1024)
 }
 
 export const logMemorySnapshot = function (label: string): void {

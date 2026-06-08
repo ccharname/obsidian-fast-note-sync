@@ -85,7 +85,7 @@ export class FileHashManager {
           } else {
 
             if (isLargeBinarySyncRisk(file.stat.size, this.plugin)) {
-              dump(`FileHashManager: skip large binary hash (${describeBinarySyncLimit()} limit): ${file.path}`, file.stat.size);
+              dump(`FileHashManager: skip large binary hash (${describeBinarySyncLimit(this.plugin)} limit): ${file.path}`, file.stat.size);
               continue;
             }
             contentHash = await hashFileAsync(this.plugin.app, file.path);
