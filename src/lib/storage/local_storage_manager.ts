@@ -208,8 +208,8 @@ export class LocalStorageManager {
             // dump("[LocalStorageManager] Skip check: WebSocket not ready or not connected.");
             return;
         }
-        if (!this.plugin.getWatchEnabled()) {
-            // dump("[LocalStorageManager] Skip check: Watch disabled.");
+        if (this.plugin.isSyncing) {
+            // dump("[LocalStorageManager] Skip check: Syncing in progress.");
             return;
         }
         if (!this.plugin.isFirstSync) {

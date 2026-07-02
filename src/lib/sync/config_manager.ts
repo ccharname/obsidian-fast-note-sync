@@ -55,7 +55,7 @@ export class ConfigManager {
   }
 
   public async handleRawEvent(path: string, eventEnter: boolean = false) {
-    if (!this.plugin.settings.configSyncEnabled || !this.plugin.getWatchEnabled()) return
+    if (!this.plugin.settings.configSyncEnabled || this.plugin.isSyncing) return
 
     const configDir = this.plugin.app.vault.configDir
     if (path.includes("/.git") || path.includes("/.DS_Store")) return

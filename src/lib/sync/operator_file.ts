@@ -941,7 +941,7 @@ export const receiveFileSyncChunkDownload = async function (data: FileSyncChunkD
   }
 
   // 仅在非同步期间(实时监听时)手动增加分片计数。同步期间由 SyncEnd 包装器统一预估
-  if (plugin.getWatchEnabled()) {
+  if (!plugin.isSyncing) {
     plugin.totalChunksToDownload += data.totalChunks
   }
 

@@ -96,8 +96,7 @@ export class EventManager {
         this.blurTimer = null
         dump("Obsidian Mobile Focus (Timer cancelled)")
       }
-      dump("Obsidian Mobile Plugin Focus (Enable)")
-      this.plugin.enableWatch()
+      dump("Obsidian Mobile Plugin Focus")
       // 回到前台立即重置退避计数器并重连
       // Reset backoff counter and reconnect immediately when returning to foreground
       this.plugin.websocket?.triggerReconnect()
@@ -112,7 +111,7 @@ export class EventManager {
         if (this.blurTimer) window.clearTimeout(this.blurTimer)
         this.blurTimer = window.setTimeout(() => {
           dump("Obsidian Mobile Blur (Executing)")
-          this.plugin.disableWatch()
+          this.plugin.websocket?.unRegister()
           this.blurTimer = null
         }, 30000)
       }
@@ -123,16 +122,9 @@ export class EventManager {
     if (activeDocument.visibilityState === "hidden") {
       if (this.plugin.settings.autoPauseMinimized) {
         dump("Obsidian 已最小化，自动暂停同步")
-        this.plugin.disableWatch()
+        this.plugin.websocket?.unRegister()
       }
     } else {
-      if (this.plugin.settings.autoPauseMinimized) {
-        dump("Obsidian 已从最小化恢复，恢复同步")
-        this.plugin.enableWatch()
-      } else {
-        // 如果未开启自动暂停，确保恢复时监听也是开启的（增强鲁棒性）
-        this.plugin.enableWatch()
-      }
       // 恢复可见时立即重置退避计数器并重连
       // Reset backoff counter and reconnect immediately when becoming visible again
       this.plugin.websocket?.triggerReconnect()

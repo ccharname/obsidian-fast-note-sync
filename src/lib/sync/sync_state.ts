@@ -32,8 +32,6 @@ export class SyncState {
   isSyncRequesting = false;
   /** 是否为首次同步 / Whether this is the first sync */
   isFirstSync = false;
-  /** 是否启用文件监听 / Whether file watching is enabled */
-  isWatchEnabled = true;
   /** 是否正在等待清理确认以便后续同步 / Whether waiting for clear-sync confirmation */
   isWaitClearSync = false;
   /** 当前同步类型 / Current sync type */

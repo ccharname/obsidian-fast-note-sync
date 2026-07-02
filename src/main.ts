@@ -144,8 +144,6 @@ export default class FastSync extends Plugin {
   set isSyncRequesting(v: boolean) { this.syncState.isSyncRequesting = v }
   get isFirstSync() { return this.syncState.isFirstSync }
   set isFirstSync(v: boolean) { this.syncState.isFirstSync = v }
-  get isWatchEnabled() { return this.syncState.isWatchEnabled }
-  set isWatchEnabled(v: boolean) { this.syncState.isWatchEnabled = v }
   get isWaitClearSync() { return this.syncState.isWaitClearSync }
   set isWaitClearSync(v: boolean) { this.syncState.isWaitClearSync = v }
   get currentSyncType() { return this.syncState.currentSyncType }
@@ -251,18 +249,6 @@ export default class FastSync extends Plugin {
   /** 计算已完成任务数 / Calculate completed task count */
   getCompletedTasks() {
     return this.syncState.getCompletedTasks()
-  }
-
-  getWatchEnabled(): boolean {
-    return this.isWatchEnabled
-  }
-
-  enableWatch() {
-    this.isWatchEnabled = true
-  }
-
-  disableWatch() {
-    this.isWatchEnabled = false
   }
 
   /**
@@ -864,7 +850,6 @@ export default class FastSync extends Plugin {
       this.fileDownloadSessions = new Map()
     } else {
       this.websocket?.unRegister()
-      this.isWatchEnabled = false
       this.ignoredFiles = new Set()
       this.ignoredConfigFiles = new Set()
       this.lastSyncMtime.clear()

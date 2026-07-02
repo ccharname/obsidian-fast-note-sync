@@ -49,9 +49,8 @@ export function checkSyncCompletion(plugin: FastSync, intervalId?: number, syncS
   const SYNC_TIMEOUT_MS = 300000;
   if (syncStartTime && Date.now() - syncStartTime > SYNC_TIMEOUT_MS) {
     if (intervalId) window.clearInterval(intervalId);
-    dump(`Sync completion timeout after ${SYNC_TIMEOUT_MS}ms, force enabling watch. Tasks: note=${JSON.stringify(plugin.noteSyncTasks)}, file=${JSON.stringify(plugin.fileSyncTasks)}, folder=${JSON.stringify(plugin.folderSyncTasks)}, config=${JSON.stringify(plugin.configSyncTasks)}`)
+    dump(`Sync completion timeout after ${SYNC_TIMEOUT_MS}ms. Tasks: note=${JSON.stringify(plugin.noteSyncTasks)}, file=${JSON.stringify(plugin.fileSyncTasks)}, folder=${JSON.stringify(plugin.folderSyncTasks)}, config=${JSON.stringify(plugin.configSyncTasks)}`)
     plugin.syncState.activeSyncContext = null; // 同步超时，清空活跃的上下文 / Sync timeout, reset the active context
-    plugin.enableWatch();
     plugin.syncTypeCompleteCount = 0;
     plugin.resetSyncTasks();
     plugin.totalFilesToDownload = 0;
@@ -130,7 +129,6 @@ export function checkSyncCompletion(plugin: FastSync, intervalId?: number, syncS
     });
 
     plugin.syncState.activeSyncContext = null; // 同步完成，清空活跃的上下文 / Sync completed, reset the active context
-    plugin.enableWatch();
     plugin.syncTypeCompleteCount = 0;
     plugin.resetSyncTasks();
     plugin.totalFilesToDownload = 0;
@@ -409,11 +407,6 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
       plugin.syncState.activeSyncContext = null; // 早期退出，清空上下文 / Early return, reset the context
       return;
     }
-    if (!plugin.getWatchEnabled()) {
-      showSyncNotice($("ui.status.last_sync_not_completed"), 4000);
-      plugin.syncState.activeSyncContext = null; // 早期退出，清空上下文 / Early return, reset the context
-      return;
-    }
 
     if (plugin.settings.readonlySyncEnabled) {
       dump("Read-only mode: Proceeding with state gathering for remote-to-local sync.");
@@ -462,7 +455,6 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
     plugin.pendingConfigDeleteAcks.clear()
     plugin.pendingConfigModifies.clear()
     plugin.localStorageManager.clearPending('pendingConfigModifies')
-    plugin.disableWatch();
 
     let expectedCount = 0;
     if (plugin.settings.syncEnabled && shouldSyncNotes) {
@@ -475,7 +467,6 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
     if (plugin.settings.configSyncEnabled && shouldSyncConfigs) expectedCount += 1;
     plugin.expectedSyncCount = expectedCount;
     if (expectedCount === 0) {
-      plugin.enableWatch();
       plugin.updateStatusBar("");
       plugin.syncState.activeSyncContext = null; // 无同步任务，清空上下文 / No tasks, reset the context
       return;
@@ -905,7 +896,6 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
   } catch (error) {
     dump("Sync failed with error: " + error);
     plugin.syncState.activeSyncContext = null; // 同步失败，清空上下文 / Sync failed, reset the context
-    plugin.enableWatch();
     plugin.updateStatusBar($("ui.status.failed") || "Sync Failed");
     window.setTimeout(() => plugin.updateStatusBar(""), 3000);
   } finally {

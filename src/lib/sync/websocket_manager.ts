@@ -411,7 +411,6 @@ export class WebSocketManager {
     }
 
     this.plugin.isFirstSync = true;
-    this.plugin.isWatchEnabled = true;
 
     // 检查是否有用户手动触发的待执行同步 / Check if user manually triggered a pending sync
     const pendingType = this.plugin.syncState.pendingSyncType;
