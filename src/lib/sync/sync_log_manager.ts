@@ -145,10 +145,12 @@ export class SyncLogManager {
      * @param currentSyncType 当前同步类型
      */
     public logReceivedMessage(action: string, data: unknown, currentSyncType: string): void {
-        // 过滤不需要记录的消息类型
+        // 过滤不需要记录的消息类型 / Filter out unnecessary message types from logging
         const excludedActions = [
             "Pong", "Authorization", "ClientInfo", "FileUploadCheck", "FileChunkDownload", "NoteSyncNeedPush", "FileSyncUpdate", "FileSyncChunkDownload",
-            "FolderSyncBatchAck", "NoteSyncBatchAck", "FileSyncBatchAck", "SettingSyncBatchAck"
+            "FolderSyncBatchAck", "NoteSyncBatchAck", "FileSyncBatchAck", "SettingSyncBatchAck",
+            "FolderSyncPage", "NoteSyncPage", "FileSyncPage", "SettingSyncPage",
+            "FolderSyncPageAck", "NoteSyncPageAck", "FileSyncPageAck", "SettingSyncPageAck"
         ];
         if (excludedActions.includes(action)) {
             return;
@@ -216,10 +218,12 @@ export class SyncLogManager {
      * @param currentSyncType 当前同步类型
      */
     public logSentMessage(action: string, data: object | string, currentSyncType: string): void {
-        // 过滤不需要记录的消息类型
+        // 过滤不需要记录的消息类型 / Filter out unnecessary message types from logging
         const excludedActions = [
             "Ping", "Authorization", "ClientInfo", "FileUploadCheck", "FileChunkDownload", "NoteSyncNeedPush",
-            "FolderSyncBatchAck", "NoteSyncBatchAck", "FileSyncBatchAck", "SettingSyncBatchAck"
+            "FolderSyncBatchAck", "NoteSyncBatchAck", "FileSyncBatchAck", "SettingSyncBatchAck",
+            "FolderSyncPage", "NoteSyncPage", "FileSyncPage", "SettingSyncPage",
+            "FolderSyncPageAck", "NoteSyncPageAck", "FileSyncPageAck", "SettingSyncPageAck"
         ];
         if (excludedActions.includes(action)) {
             return;

@@ -48,7 +48,7 @@ export class SyncState {
   private createStatsProxy(type: "note" | "file" | "setting" | "folder", initVal: SyncTaskStats): SyncTaskStats {
     return new Proxy(initVal, {
       set: (target, prop, value, receiver) => {
-        const oldVal = (target as Record<string | symbol, unknown>)[prop as string];
+        const oldVal = (target as any)[prop];
         const success = Reflect.set(target, prop, value, receiver);
         if (success && prop === "completed" && value !== oldVal) {
           if (this.onCompletedChange) {

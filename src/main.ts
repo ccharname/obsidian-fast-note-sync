@@ -106,7 +106,9 @@ export default class FastSync extends Plugin {
 
     if (!action) return;
 
-    const pageState = this.syncPageStateMap.get(type);
+    // 如果是首拉 ACK 信号 (pageIndex === -1)，强行忽略可能残留的 pageState，强制使用当前的 activeSyncContext
+    // If it's the initial ACK signal (pageIndex === -1), ignore any stale pageState and force activeSyncContext
+    const pageState = pageIndex === -1 ? undefined : this.syncPageStateMap.get(type);
     const msgContext = pageState?.context || this.syncState.activeSyncContext || "";
 
     dump(`[sendSyncPageAck] Sending ACK for type: ${type}, action: ${action}, pageIndex: ${pageIndex}, context: ${msgContext}`);
@@ -117,7 +119,11 @@ export default class FastSync extends Plugin {
       pageIndex: pageIndex
     });
 
-    this.syncPageStateMap.delete(type);
+    // 只有当存在真正的 pageState 且非首拉时，才在发送后删除对应状态
+    // Only delete from the map if we used a real pageState and it's not the initial ACK
+    if (pageIndex !== -1) {
+      this.syncPageStateMap.delete(type);
+    }
   }
   /** 运行时 API 配置 / Runtime API configuration */
   readonly runtimeConfig = new RuntimeConfig()

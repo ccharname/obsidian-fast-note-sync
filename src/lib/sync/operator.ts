@@ -53,6 +53,7 @@ export function checkSyncCompletion(plugin: FastSync, intervalId?: number, syncS
     plugin.syncState.activeSyncContext = null; // 同步超时，清空活跃的上下文 / Sync timeout, reset the active context
     plugin.syncTypeCompleteCount = 0;
     plugin.resetSyncTasks();
+    plugin.syncPageStateMap.clear(); // 清空残留的页状态 / Clear stale page state map
     plugin.totalFilesToDownload = 0;
     plugin.downloadedFilesCount = 0;
     plugin.totalChunksToDownload = 0;
@@ -131,6 +132,7 @@ export function checkSyncCompletion(plugin: FastSync, intervalId?: number, syncS
     plugin.syncState.activeSyncContext = null; // 同步完成，清空活跃的上下文 / Sync completed, reset the active context
     plugin.syncTypeCompleteCount = 0;
     plugin.resetSyncTasks();
+    plugin.syncPageStateMap.clear(); // 同步完成，清空残留的页状态 / Sync completed, clear page state map
     plugin.totalFilesToDownload = 0;
     plugin.downloadedFilesCount = 0;
     plugin.totalChunksToDownload = 0;
@@ -430,6 +432,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
       activeTypes.push('setting');
     }
     plugin.progressTracker.reset(activeTypes);
+    plugin.syncPageStateMap.clear(); // 开始新一轮同步，清空上一轮的页状态残留，防 Context 错乱 / Start new sync, clear stale page states
     plugin.totalFilesToDownload = 0;
     plugin.downloadedFilesCount = 0;
     plugin.totalChunksToDownload = 0;
