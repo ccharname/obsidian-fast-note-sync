@@ -219,6 +219,61 @@ const VaultScanningSummaryCard = ({ log }: { log: SyncLog }) => {
     );
 };
 
+interface SyncProgressState {
+    pct: number;
+    detail: string;
+    phase: 'hash' | 'upload' | 'download' | 'idle';
+    visible: boolean;
+}
+
+const SyncProgressBanner = ({ plugin }: { plugin: FastSync }) => {
+    const [progress, setProgress] = React.useState<SyncProgressState>({
+        pct: 0, detail: '', phase: 'idle', visible: false
+    });
+
+    React.useEffect(() => {
+        let hideTimer: number | null = null;
+
+        const handler = (data: { pct: number; detail: string; phase: SyncProgressState['phase'] }) => {
+            if (hideTimer) window.clearTimeout(hideTimer);
+            setProgress({ ...data, visible: true });
+
+            if (data.pct === 100) {
+                // Auto-hide 2s after completion / 完成后 2 秒自动隐藏
+                hideTimer = window.setTimeout(() => {
+                    setProgress(prev => ({ ...prev, visible: false }));
+                }, 2000);
+            }
+        };
+
+        (plugin.app.workspace as unknown as { on: (name: string, cb: (data: unknown) => void) => void })
+            .on('fns:sync-progress', handler as (data: unknown) => void);
+
+        return () => {
+            if (hideTimer) window.clearTimeout(hideTimer);
+            (plugin.app.workspace as unknown as { off: (name: string, cb: (data: unknown) => void) => void })
+                .off('fns:sync-progress', handler as (data: unknown) => void);
+        };
+    }, [plugin]);
+
+    if (!progress.visible) return null;
+
+    const phaseIcon = progress.phase === 'hash' ? '\uD83D\uDD0D' : progress.phase === 'upload' ? '\u2191' : '\u2193';
+    const isComplete = progress.pct === 100;
+
+    return (
+        <div className={`fns-mobile-progress-banner${isComplete ? ' is-complete' : ''}`}>
+            <div className="fns-mobile-progress-header">
+                <span className="fns-mobile-progress-phase">{isComplete ? '\u2713' : phaseIcon}</span>
+                <div className="fns-mobile-progress-bar-wrap">
+                    <div className="fns-mobile-progress-fill" style={{ width: `${progress.pct}%` }} />
+                </div>
+                <span className="fns-mobile-progress-pct">{progress.pct}%</span>
+            </div>
+        </div>
+    );
+};
+
 const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
     const [logs, setLogs] = React.useState<SyncLog[]>([]);
 
@@ -637,6 +692,10 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
                     </button>
                 </div>
             )}
+
+            {/* 移动端同步进度横幅（仅移动端渲染，位于底部）*/}
+            {/* Mobile sync progress banner, only rendered on mobile, at the bottom */}
+            {Platform.isMobile && <SyncProgressBanner plugin={plugin} />}
         </div>
     );
 };

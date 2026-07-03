@@ -92,6 +92,12 @@ export default class FastSync extends Plugin {
     this.progressTracker.onChange = (pct, detail, phase) => {
       this.statusBarManager?.render(pct, detail, phase);
     };
+    this.progressTracker.onProgressChange = (pct, detail, phase) => {
+      // Broadcast progress via workspace event bus to decouple plugin from view reference.
+      // 通过 workspace 事件总线广播进度，解耦 plugin 与 view 的直接引用。
+      (this.app.workspace as unknown as { trigger: (name: string, data: unknown) => void })
+        .trigger('fns:sync-progress', { pct, detail, phase });
+    };
     this.syncState.onCompletedChange = (type) => {
       this.progressTracker.recordCompleted(type);
     };

@@ -57,6 +57,12 @@ export class SyncProgressTracker {
    */
   onChange?: (pct: number, detail: string, phase: SyncPhase) => void;
 
+  /**
+   * Secondary progress callback, used by SyncLogView for mobile display.
+   * 独立的进度变更回调，供同步日志视图（移动端）订阅，与状态栏回调互相独立。
+   */
+  onProgressChange?: (pct: number, detail: string, phase: SyncPhase) => void;
+
   getActiveTypes(): SyncType[] {
     return Array.from(this.activeTypes);
   }
@@ -231,6 +237,9 @@ export class SyncProgressTracker {
     if (this.onChange) {
       this.onChange(100, this.getDetailText(), 'idle');
     }
+    if (this.onProgressChange) {
+      this.onProgressChange(100, this.getDetailText(), 'idle');
+    }
   }
 
   /**
@@ -386,6 +395,9 @@ export class SyncProgressTracker {
   private notify(): void {
     if (this.onChange) {
       this.onChange(this.getOverallPct(), this.getDetailText(), this.getPhase());
+    }
+    if (this.onProgressChange) {
+      this.onProgressChange(this.getOverallPct(), this.getDetailText(), this.getPhase());
     }
   }
 }

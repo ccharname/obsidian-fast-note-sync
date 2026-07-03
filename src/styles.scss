@@ -571,6 +571,70 @@
   }
 }
 
+// Mobile sync progress banner at the bottom of sync log view
+// 移动端同步日志底部进度横幅
+.fns-mobile-progress-banner {
+  padding: 8px 12px 6px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  flex-shrink: 0;
+
+  &.is-complete {
+    .fns-mobile-progress-fill {
+      background: var(--color-green);
+    }
+
+    .fns-mobile-progress-phase {
+      color: var(--color-green);
+    }
+  }
+
+  .fns-mobile-progress-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .fns-mobile-progress-phase {
+    font-size: 12px;
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+    color: var(--text-muted);
+  }
+
+  .fns-mobile-progress-bar-wrap {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--background-modifier-border);
+    overflow: hidden;
+  }
+
+  .fns-mobile-progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--interactive-accent);
+    transition: width 0.25s ease;
+  }
+
+  .fns-mobile-progress-pct {
+    font-size: 11px;
+    color: var(--text-muted);
+    width: 30px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .fns-mobile-progress-detail {
+    margin-top: 4px;
+    font-size: 10px;
+    color: var(--text-faint);
+    line-height: 1.4;
+    word-break: break-all;
+  }
+}
+
 .setting-item-info {
   margin-bottom: var(--size-4-2);
 
