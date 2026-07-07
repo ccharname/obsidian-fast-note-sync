@@ -875,10 +875,9 @@ export async function loadWsPreProbe(app: App, plugin: FastSync, dataJsonEnabled
 }
 
 /**
- * 计算特定 Vault 的混淆 Key
+ * 从任意字符串派生混淆 Key
  */
-function getObfuscationKey(app: App): number {
-  const val = app.vault.getName() + "_" + app.vault.configDir;
+function hashToKey(val: string): number {
   let hash = 0;
   for (let i = 0; i < val.length; i++) {
     hash = (hash << 5) - hash + val.charCodeAt(i);
@@ -888,32 +887,64 @@ function getObfuscationKey(app: App): number {
 }
 
 /**
- * 对 Token 进行基于当前 Vault 标识的混淆加密
+ * 稳定混淆 Key：不依赖 vault 名/configDir，跨 iCloud 改名恒定。
+ * 混淆本非真加密（key 从源码可推），此处目的仅是「不明文落盘」，用固定盐即可，
+ * 且能让 data.json 里的 token 在多设备间正常解码（同步兜底所需）。
  */
-export function obfuscateToken(app: App, token: string): string {
-  if (!token) return "";
-  const key = getObfuscationKey(app);
-  let result = "";
-  for (let i = 0; i < token.length; i++) {
-    const charCode = token.charCodeAt(i) ^ (key % 256);
-    result += ("0" + charCode.toString(16)).slice(-2);
-  }
-  return "fns-enc:" + result;
+const STABLE_OBFUSCATION_SALT = "fast-note-sync-stable-obf-v1";
+function getStableObfuscationKey(): number {
+  return hashToKey(STABLE_OBFUSCATION_SALT);
 }
 
 /**
- * 对混淆加密的 Token 进行解密
+ * 旧版混淆 Key：绑定 vault 显示名。仅用于兼容解码历史 `fns-enc:` 密文。
+ * 注意：vault 一旦被 iCloud 改名，此 key 就变了 → 旧密文解出乱码（这正是配置丢失根因之一），
+ * 因此新写入一律走稳定 key（fns-enc2:），此函数只在读旧值时兜底。
  */
-export function deobfuscateToken(app: App, encryptedToken: string): string {
-  if (!encryptedToken || !encryptedToken.startsWith("fns-enc:")) return "";
-  const rawHex = encryptedToken.substring(8);
-  const key = getObfuscationKey(app);
+function getLegacyObfuscationKey(app: App): number {
+  return hashToKey(app.vault.getName() + "_" + app.vault.configDir);
+}
+
+function xorHex(input: string, key: number): string {
+  let result = "";
+  for (let i = 0; i < input.length; i++) {
+    const charCode = input.charCodeAt(i) ^ (key % 256);
+    result += ("0" + charCode.toString(16)).slice(-2);
+  }
+  return result;
+}
+
+function unxorHex(rawHex: string, key: number): string {
   let result = "";
   for (let i = 0; i < rawHex.length; i += 2) {
     const charCode = parseInt(rawHex.substring(i, i + 2), 16) ^ (key % 256);
     result += String.fromCharCode(charCode);
   }
   return result;
+}
+
+/**
+ * 对 Token 进行混淆加密（稳定 key，跨 vault 改名/多设备恒定），输出 `fns-enc2:` 格式
+ */
+export function obfuscateToken(app: App, token: string): string {
+  if (!token) return "";
+  return "fns-enc2:" + xorHex(token, getStableObfuscationKey());
+}
+
+/**
+ * 解密混淆 Token：
+ * - `fns-enc2:` 新格式 → 稳定 key 解码
+ * - `fns-enc:`  旧格式 → 旧版 vault 名 key 解码（vault 未改名时可恢复；已改名则为乱码，需重输）
+ */
+export function deobfuscateToken(app: App, encryptedToken: string): string {
+  if (!encryptedToken) return "";
+  if (encryptedToken.startsWith("fns-enc2:")) {
+    return unxorHex(encryptedToken.substring(9), getStableObfuscationKey());
+  }
+  if (encryptedToken.startsWith("fns-enc:")) {
+    return unxorHex(encryptedToken.substring(8), getLegacyObfuscationKey(app));
+  }
+  return "";
 }
 
 /**
@@ -979,12 +1010,22 @@ export async function loadApiToken(app: App, plugin: FastSync, dataJsonToken?: s
       dump("[ApiToken] Found legacy encrypted token, but SafeStorage is removed. Please re-input token.");
       return "";
     }
-    
-    // 如果已经是新版混淆加密格式，进行解密
-    if (token.startsWith("fns-enc:")) {
+
+    // 新版稳定混淆格式：直接解码
+    if (token.startsWith("fns-enc2:")) {
       return deobfuscateToken(app, token);
     }
-    
+
+    // 旧版 vault 名混淆格式：解码后自动升级为稳定格式（vault 未改名时可恢复，已改名则解出乱码，用户需重输）
+    if (token.startsWith("fns-enc:")) {
+      const decoded = deobfuscateToken(app, token);
+      if (decoded) {
+        dump("[ApiToken] Migrating legacy vault-keyed token to stable obfuscation...");
+        void saveApiToken(app, plugin, decoded);
+      }
+      return decoded;
+    }
+
     // 否则，说明是历史保存的明文 Token：
     // 1. 兼容性读取
     const plainToken = token;
