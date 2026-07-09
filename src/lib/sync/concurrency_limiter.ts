@@ -117,8 +117,13 @@ export class ConcurrencyLimiter {
         dump(`Concurrency: Clearing all ${this.activeKeys.size} active tasks and ${this.queue.length} queued tasks.`);
         this.activeKeys.clear();
         this.fifoKeys = [];
-        // 拒绝所有正在等待的 Promise（可选，这里简单清空队列）
+        // 放行所有正在等待的 Promise，避免排队任务永久悬挂（调用方在 withLock 内，
+        // resolve 后任务会因连接已断开而自然失败，走 catch/finally 释放锁）
+        const pending = this.queue;
         this.queue = [];
+        for (const item of pending) {
+            item.resolve();
+        }
     }
 
 }
