@@ -127,7 +127,7 @@ export default {
   "setting.sync.clear_remote_confirm": "Confirm clearing the vault configuration from the remote service?\nThis operation will physically delete all configurations of this vault stored on the remote service and cannot be recovered.",
   "ui.status.clear_success": "Remote configuration cleared",
   "setting.sync.concurrency_control": "Concurrency Control",
-  "setting.sync.concurrency_control_desc": "When enabled, uses ACK messages from the server to precisely control the upload queue, preventing client lag from sudden request surges. Prioritizes uploads before downloads. Disabled by default.",
+  "setting.sync.concurrency_control_desc": "When enabled, uses ACK messages from the server to precisely control the upload queue, preventing client lag from sudden request surges. Prioritizes uploads before downloads. Enabled by default.",
   "setting.sync.max_concurrency": "Maximum Concurrency",
   "setting.sync.max_concurrency_desc": "Sets the number of concurrent sync tasks. Recommended range: 3-10. Only takes effect when concurrency control is enabled.",
   "setting.sync.show_concurrency_indicator": "Show Concurrency Indicator",

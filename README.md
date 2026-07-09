@@ -39,6 +39,9 @@ For users in Mainland China, it is recommended to use the Tencent `cnb.cool` mir
     - Can also use one-click import on the desktop app to automatically complete authorization.
 - 📗 **Real-time Note Sync**:
     - Automatically monitors and syncs the creation, update, and deletion of all notes inside the Vault (repository).
+- ⚡ **Sync Pipeline Acceleration**:
+    - Upload batches and download pages now stream through a sliding-window pipeline instead of waiting for each server acknowledgment one at a time, dramatically cutting round-trips on large vaults.
+    > ⚠️ **Note**: Requires v2.3.0+. Best paired with Server v3.6.0+ (internal benchmarks measured up to 6.64× faster uploads / 3.19× faster downloads on RTT-bound connections); automatically falls back to the previous behavior with older servers — no forced upgrade needed.
 - 🖼️ **Full Attachment Support**:
     - Syncs images, videos, audio, and all other non-configuration files in real-time.
     > ⚠️ **Note**: Requires v1.0+, Server v0.9+. Please manage attachment file sizes; large files may cause synchronization delays.

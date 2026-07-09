@@ -127,7 +127,7 @@ export default {
   "setting.sync.clear_remote_confirm": "원격 서비스에서 노트 라이브러리 설정을 정리하시겠습니까?\n이 작업은 원격 서비스에 저장된 이 저장소의 모든 설정을 물리적으로 삭제하며 복구할 수 없습니다.",
   "ui.status.clear_success": "원격 설정이 정리되었습니다",
   "setting.sync.concurrency_control": "동시성 제어",
-  "setting.sync.concurrency_control_desc": "활성화하면 서버에서 응답하는 ACK 메시지를 통해 업로드 큐를 정밀하게 제어하여 순간적으로 많은 요청이 쌓여 클라이언트가 느려지는 것을 방지하고, 업로드를 우선으로 수행한 후 다운로드를 진행합니다. 기본적으로 비활성화되어 있습니다.",
+  "setting.sync.concurrency_control_desc": "활성화하면 서버에서 응답하는 ACK 메시지를 통해 업로드 큐를 정밀하게 제어하여 순간적으로 많은 요청이 쌓여 클라이언트가 느려지는 것을 방지하고, 업로드를 우선으로 수행한 후 다운로드를 진행합니다. 기본적으로 활성화되어 있습니다.",
   "setting.sync.max_concurrency": "최대 동시성",
   "setting.sync.max_concurrency_desc": "동시에 실행할 동기화 작업의 수를 설정합니다. 권장 범위는 3~10 입니다. 동시성 제어가 활성화된 경우에만 적용됩니다.",
   "setting.sync.show_concurrency_indicator": "동시 업로드 제어 아이콘 표시",
