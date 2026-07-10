@@ -1,7 +1,7 @@
 import { TFolder, TFile, normalizePath } from "obsidian";
 
 import { receiveFileUpload, receiveFileSyncUpdate, receiveFileSyncDelete, receiveFileSyncMtime, receiveFileSyncChunkDownload, receiveFileSyncEnd, checkAndUploadAttachments, receiveFileSyncRename, receiveFileRenameAck, receiveFileUploadAck, receiveFileDeleteAck, isPluginUnloading } from "./operator_file";
-import { hashContent, hashContentAsync, dump, isPathExcluded, isFolderSyncPathExcluded, configIsPathExcluded, getConfigSyncCustomDirs, generateUUID, showSyncNotice, isLargeBinarySyncRisk, describeBinarySyncLimit, hashFileAsync, formatFileSize } from "../utils/helpers";
+import { hashContent, hashContentAsync, dump, isPathExcluded, isFolderSyncPathExcluded, configIsPathExcluded, getConfigSyncCustomDirs, generateUUID, showSyncNotice, isLargeBinarySyncRisk, describeBinarySyncLimit, hashFileAsync, formatFileSize, yieldToMain } from "../utils/helpers";
 import { receiveConfigSyncModify, receiveConfigUpload, receiveConfigSyncMtime, receiveConfigSyncDelete, receiveConfigSyncEnd, configAllPaths, receiveConfigSyncClear, receiveConfigModifyAck, receiveConfigDeleteAck } from "./operator_config";
 import { receiveNoteSyncModify, receiveNoteUpload, receiveNoteSyncMtime, receiveNoteSyncDelete, receiveNoteSyncEnd, receiveNoteSyncRename, receiveNoteModifyAck, receiveNoteRenameAck, receiveNoteDeleteAck } from "./operator_note";
 import { SyncMode, SnapFile, SnapFolder, SyncEndData, PathHashFile, NoteSyncData, FileSyncData, ConfigSyncData, FolderSyncData } from "../utils/types";
@@ -627,7 +627,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
 
       for (const file of list) {
         if (++processedCount % 20 === 0) {
-          await sleep(0);
+          await yieldToMain();
           if (isPluginUnloading) {
             plugin.syncState.activeSyncContext = null;
             return;
@@ -789,7 +789,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
         const localPathsSet = new Set(list.map(f => f.path)); // 优化：使用 Set 提高查找效率
         let delCount = 0;
         for (const path of trackedPaths) {
-          if (++delCount % 100 === 0) await sleep(0);
+          if (++delCount % 100 === 0) await yieldToMain();
           if (isPathExcluded(path, plugin)) continue;
           if (!localPathsSet.has(path)) {
             const item = { path: path, pathHash: hashContent(path) };
@@ -807,7 +807,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
           const localFolderPathsSet = new Set(list.filter(f => f instanceof TFolder).map(f => f.path));
           let folderCount = 0;
           for (const path of trackedFolderPaths) {
-            if (++folderCount % 100 === 0) await sleep(0);
+            if (++folderCount % 100 === 0) await yieldToMain();
             if (isFolderSyncPathExcluded(path, plugin)) continue;
             if (!localFolderPathsSet.has(path)) {
               delFolders.push({ path: path, pathHash: hashContent(path) });
@@ -820,7 +820,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
         const localPathsSet = new Set(list.map(f => f.path));
         let missingCount = 0;
         for (const path of trackedPaths) {
-          if (++missingCount % 100 === 0) await sleep(0);
+          if (++missingCount % 100 === 0) await yieldToMain();
           if (isPathExcluded(path, plugin)) continue;
           if (!localPathsSet.has(path)) {
             const item = { path: path, pathHash: hashContent(path) };
@@ -838,7 +838,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
           const localFolderPathsSet = new Set(list.filter(f => f instanceof TFolder).map(f => f.path));
           let folderCount = 0;
           for (const path of trackedFolderPaths) {
-            if (++folderCount % 100 === 0) await sleep(0);
+            if (++folderCount % 100 === 0) await yieldToMain();
             if (isFolderSyncPathExcluded(path, plugin)) continue;
             if (!localFolderPathsSet.has(path)) {
               missingFolders.push({ path: path, pathHash: hashContent(path) });
