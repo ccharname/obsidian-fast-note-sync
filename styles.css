@@ -3372,6 +3372,33 @@ body .suggestion-container {
   font-weight: 600;
 }
 
+/* 有效期选择 / Expiration select */
+.fns-share-expire-select-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.fns-share-expire-label {
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+.fns-share-expire-select {
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background-color: var(--background-primary-alt);
+  font-size: 0.85em;
+  padding: 0 8px;
+}
+.fns-share-expire-current {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
 @keyframes fns-breathing {
   0% {
     opacity: 0.4;

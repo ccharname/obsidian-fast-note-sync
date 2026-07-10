@@ -2,17 +2,30 @@ import { App, Modal, setIcon, ButtonComponent, setTooltip } from "obsidian";
 import type FastSync from "../main";
 import { $ } from "../i18n/lang";
 import { showSyncNotice } from "../lib/utils/helpers";
+import { ConfirmModal } from "./confirm-modal";
+
+// 过期选项对应的秒数（1 天 / 7 天 / 30 天），"never" 表示永久，"keep" 表示编辑时保持现有有效期不变
+const EXPIRE_DURATIONS: Record<string, number> = {
+    "1d": 86400,
+    "7d": 7 * 86400,
+    "30d": 30 * 86400,
+};
 
 export class ShareModal extends Modal {
     private plugin: FastSync;
     private path: string;
     private loading: boolean = false;
-    private shareData: { id: number, token: string, isPassword?: boolean, shortLink?: string, baseUrl?: string } | null = null;
-    
+    private shareData: { id: number, token: string, isPassword?: boolean, shortLink?: string, baseUrl?: string, expiresAt?: string } | null = null;
+
     // 密码状态相关
     private isPasswordVisible: boolean = false;
     private passwordValue: string = "";
     private isPasswordDirty: boolean = false;
+
+    // 有效期状态相关
+    private expireCreateValue: string = "never";
+    private expireEditValue: string = "keep";
+    private isExpireDirty: boolean = false;
 
     constructor(app: App, plugin: FastSync, path: string) {
         super(app);
@@ -41,6 +54,29 @@ export class ShareModal extends Modal {
     onClose() {
         const { contentEl } = this;
         contentEl.empty();
+    }
+
+    // 解析服务端返回的 expiresAt（ISO 字符串），Go 零值时间或空值表示永久有效，返回 0
+    private parseExpiresAt(iso?: string): number {
+        if (!iso) return 0;
+        const ts = new Date(iso).getTime();
+        if (isNaN(ts) || ts <= 0) return 0;
+        return Math.floor(ts / 1000);
+    }
+
+    private formatExpiresAt(iso?: string): string {
+        const seconds = this.parseExpiresAt(iso);
+        if (seconds <= 0) return $("ui.share.expire.never");
+        return new Date(seconds * 1000).toLocaleString();
+    }
+
+    // 根据下拉选项计算最终写入服务端的 expireAt（unix 秒，0 表示永久），fallbackIso 用于 "keep" 选项
+    private resolveExpireAt(value: string, fallbackIso?: string): number {
+        if (value === "keep") return this.parseExpiresAt(fallbackIso);
+        if (value === "never") return 0;
+        const duration = EXPIRE_DURATIONS[value];
+        if (!duration) return 0;
+        return Math.floor(Date.now() / 1000) + duration;
     }
 
     private render() {
@@ -93,8 +129,26 @@ export class ShareModal extends Modal {
         const emptyState = parent.createDiv("fns-share-empty-state");
         const emptyIcon = emptyState.createDiv("fns-empty-icon");
         setIcon(emptyIcon, "share-2");
-        
+
         emptyState.createDiv({ text: $("ui.share.not_shared_yet"), cls: "fns-empty-text" });
+
+        // 过期时间选择（创建前）
+        const expireGroup = emptyState.createDiv("fns-share-expire-select-group");
+        expireGroup.createSpan({ text: $("ui.share.expire.label"), cls: "fns-share-expire-label" });
+        const expireSelect = expireGroup.createEl("select", { cls: "fns-share-expire-select" });
+        const createOptions: [string, string][] = [
+            ["never", $("ui.share.expire.never")],
+            ["1d", $("ui.share.expire.1d")],
+            ["7d", $("ui.share.expire.7d")],
+            ["30d", $("ui.share.expire.30d")],
+        ];
+        for (const [value, label] of createOptions) {
+            const opt = expireSelect.createEl("option", { text: label, value });
+            if (value === this.expireCreateValue) opt.selected = true;
+        }
+        expireSelect.addEventListener("change", () => {
+            this.expireCreateValue = expireSelect.value;
+        });
 
         const btn = new ButtonComponent(emptyState)
             .setButtonText(this.loading ? $("ui.share.button_creating") : $("ui.share.create"))
@@ -103,7 +157,8 @@ export class ShareModal extends Modal {
             .onClick(async () => {
                 this.loading = true;
                 this.render();
-                const res = await this.plugin.api.createShare(this.path);
+                const expireAt = this.resolveExpireAt(this.expireCreateValue);
+                const res = await this.plugin.api.createShare(this.path, expireAt);
                 this.loading = false;
                 if (res) {
                     this.shareData = res;
@@ -201,27 +256,78 @@ export class ShareModal extends Modal {
             savePwdBtn.buttonEl.addClass("is-dirty");
         });
 
-        savePwdBtn.onClick(async () => {
-            if (!this.isPasswordDirty) {
-                showSyncNotice($("ui.common.noChange"));
-                return;
-            }
+        const doSavePassword = async () => {
             this.loading = true;
             this.render();
-            const success = await this.plugin.api.updateSharePassword(this.path, this.passwordValue);
+            const expireAt = this.resolveExpireAt(this.expireEditValue, this.shareData?.expiresAt);
+            const success = await this.plugin.api.updateSharePassword(this.path, this.passwordValue, expireAt);
             this.loading = false;
             if (success) {
                 showSyncNotice($("ui.common.saveSuccess"));
                 this.shareData!.isPassword = !!this.passwordValue;
+                this.shareData!.expiresAt = expireAt > 0 ? new Date(expireAt * 1000).toISOString() : undefined;
                 this.isPasswordDirty = false;
+                this.isExpireDirty = false;
+                this.expireEditValue = "keep";
                 if (this.passwordValue) {
                     this.passwordValue = "";
                     this.isPasswordVisible = false;
                 }
             }
             this.render();
+        };
+
+        savePwdBtn.onClick(async () => {
+            if (!this.isPasswordDirty && !this.isExpireDirty) {
+                showSyncNotice($("ui.common.noChange"));
+                return;
+            }
+            // 单独修改有效期且未触碰密码框时，服务端会以空密码覆盖现有密码，需先提示确认
+            if (this.isExpireDirty && !this.isPasswordDirty && this.shareData?.isPassword) {
+                new ConfirmModal(
+                    this.app,
+                    $("ui.share.expire.confirmTitle"),
+                    $("ui.share.expire.confirmClearPassword"),
+                    () => { void doSavePassword(); },
+                    undefined,
+                    undefined,
+                    true
+                ).open();
+                return;
+            }
+            await doSavePassword();
         });
 
+        // --- 2.5 有效期部分 (Expiration Section) ---
+        const expireSection = mainCard.createDiv("fns-share-section");
+        const expireHeader = expireSection.createDiv("fns-share-card-header");
+        setIcon(expireHeader.createSpan("fns-header-icon"), "calendar-clock");
+        expireHeader.createSpan({ text: $("ui.share.expire.label"), cls: "fns-header-title" });
+
+        const expireActionGroup = expireSection.createDiv("fns-share-input-group");
+        expireActionGroup.createSpan({
+            text: `${$("ui.share.expire.current")}: ${this.formatExpiresAt(this.shareData?.expiresAt)}`,
+            cls: "fns-share-expire-current"
+        });
+
+        const editExpireSelect = expireActionGroup.createEl("select", { cls: "fns-share-expire-select" });
+        const editOptions: [string, string][] = [
+            ["keep", $("ui.share.expire.keep")],
+            ["never", $("ui.share.expire.never")],
+            ["1d", $("ui.share.expire.1d")],
+            ["7d", $("ui.share.expire.7d")],
+            ["30d", $("ui.share.expire.30d")],
+        ];
+        for (const [value, label] of editOptions) {
+            const opt = editExpireSelect.createEl("option", { text: label, value });
+            if (value === this.expireEditValue) opt.selected = true;
+        }
+        editExpireSelect.addEventListener("change", () => {
+            this.expireEditValue = editExpireSelect.value;
+            this.isExpireDirty = this.expireEditValue !== "keep";
+            if (this.isExpireDirty) savePwdBtn.buttonEl.addClass("is-dirty");
+            this.render();
+        });
 
         // --- 3. 短链接部分 (Short Link Section) ---
         const shortSection = mainCard.createDiv("fns-share-section");

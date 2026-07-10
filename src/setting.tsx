@@ -9,6 +9,7 @@ import { RuleEditorModal } from "./views/rule-editor-modal";
 import { PathSuggestOptions } from "./views/path-suggest";
 import { DebugLogModal } from "./views/debug-log-modal";
 import { ConfirmModal } from "./views/confirm-modal";
+import { ShareManageModal } from "./views/share-manage-modal";
 import { AppWithInternal } from "./lib/utils/types";
 import { RuleEditor } from "./views/rule-editor";
 import { $ } from "./i18n/lang";
@@ -1164,6 +1165,13 @@ export class SettingTab extends PluginSettingTab {
       }),
     )
     this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.general.show_share_icon_desc"))
+
+    new Setting(set).setName($("setting.general.share_manage")).addButton((btn) =>
+      btn.setButtonText($("setting.general.share_manage_button")).onClick(() => {
+        new ShareManageModal(this.app, this.plugin).open()
+      }),
+    )
+    this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.general.share_manage_desc"))
 
     new Setting(set).setName($("setting.general.show_upgrade_badge")).setClass("fns-setting-item-checkbox").addToggle((toggle) =>
       toggle.setValue(this.plugin.settings.showUpgradeBadge).onChange(async (value) => {

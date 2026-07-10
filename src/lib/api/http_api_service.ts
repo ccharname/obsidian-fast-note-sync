@@ -108,6 +108,29 @@ export interface WSClient {
     };
 }
 
+export interface ShareListItem {
+    id: number;
+    uid: number;
+    title: string;
+    url: string;
+    notePath: string;
+    vaultName: string;
+    isPassword: boolean;
+    status: number;
+    viewCount: number;
+    lastViewedAt: string;
+    expiresAt: string;
+    shortLink: string;
+    createdAt: string;
+    updatedAt: string;
+    baseUrl: string;
+}
+
+export interface ShareListResponse {
+    list: ShareListItem[];
+    pager: Pager;
+}
+
 export interface FileInfoResponse {
     id: number;
     path: string;
@@ -657,7 +680,7 @@ export class HttpApiService {
     /**
      * 创建分享链接
      */
-    async createShare(path: string): Promise<{ id: number, token: string, isPassword?: boolean, shortLink?: string, baseUrl?: string } | null> {
+    async createShare(path: string, expireAt?: number): Promise<{ id: number, token: string, isPassword?: boolean, shortLink?: string, baseUrl?: string, expiresAt?: string } | null> {
         const endpoint = `/api/share`;
         try {
             const { status, json } = await this.request(endpoint, {
@@ -665,7 +688,8 @@ export class HttpApiService {
                 body: JSON.stringify({
                     path: path,
                     pathHash: hashContent(path),
-                    vault: this.plugin.settings.vault
+                    vault: this.plugin.settings.vault,
+                    expireAt: expireAt || 0
                 })
             });
 
@@ -675,7 +699,7 @@ export class HttpApiService {
                 showSyncNotice(msg);
                 return null;
             }
-            const res = json as ApiResponse<{ id: number, token: string, isPassword?: boolean, shortLink?: string, baseUrl?: string }>;
+            const res = json as ApiResponse<{ id: number, token: string, isPassword?: boolean, shortLink?: string, baseUrl?: string, expiresAt?: string }>;
             return res.data;
         } catch (e) {
             dumpError("createShare error:", e);
@@ -687,7 +711,7 @@ export class HttpApiService {
     /**
      * 查询分享状态
      */
-    async getShare(path: string): Promise<{ id: number, token: string, isPassword?: boolean, shortLink?: string, baseUrl?: string } | null> {
+    async getShare(path: string): Promise<{ id: number, token: string, isPassword?: boolean, shortLink?: string, baseUrl?: string, expiresAt?: string } | null> {
         const params = new URLSearchParams({
             vault: this.plugin.settings.vault,
             path: path,
@@ -702,7 +726,7 @@ export class HttpApiService {
             if (status !== 200 || !this.isSuccess(json)) {
                 return null;
             }
-            const res = json as ApiResponse<{ id: number, token: string, isPassword?: boolean, shortLink?: string, baseUrl?: string }>;
+            const res = json as ApiResponse<{ id: number, token: string, isPassword?: boolean, shortLink?: string, baseUrl?: string, expiresAt?: string }>;
             return res.data;
         } catch (e) {
             dumpError("getShare error:", e);
@@ -711,9 +735,9 @@ export class HttpApiService {
     }
 
     /**
-     * 更新分享密码
+     * 更新分享密码及有效期
      */
-    async updateSharePassword(path: string, password?: string): Promise<boolean> {
+    async updateSharePassword(path: string, password?: string, expireAt?: number): Promise<boolean> {
         const endpoint = `/api/share/password`;
         try {
             const { status, json } = await this.request(endpoint, {
@@ -722,7 +746,8 @@ export class HttpApiService {
                     path: path,
                     pathHash: hashContent(path),
                     vault: this.plugin.settings.vault,
-                    password: password
+                    password: password,
+                    expireAt: expireAt || 0
                 })
             });
 
@@ -821,6 +846,38 @@ export class HttpApiService {
             dumpError("getSharePaths error:", e);
             return null;
         }
+    }
+
+    /**
+     * 获取当前用户的所有分享列表（跨 vault）
+     */
+    async listShares(page = 1, pageSize = 20, sortBy = "created_at", sortOrder = "desc", signal?: AbortSignal): Promise<ShareListResponse> {
+        const params = new URLSearchParams({
+            page: page.toString(),
+            pageSize: pageSize.toString(),
+            sort_by: sortBy,
+            sort_order: sortOrder
+        });
+        const endpoint = `/api/shares?${params.toString()}`;
+
+        const { status, json } = await this.request(endpoint, {
+            method: "GET",
+            signal
+        });
+
+        if (status !== 200) {
+            throw new Error(`HTTP ${status}: Failed to fetch share list`);
+        }
+
+        const res = json as ApiResponse<{ list: ShareListItem[], pager?: Pager }>;
+        if (!this.isSuccess(res)) {
+            throw new Error(res?.message || "Failed to fetch share list");
+        }
+
+        return {
+            list: res.data?.list || [],
+            pager: res.data?.pager || { page, pageSize, totalRows: 0, totalPages: 0 }
+        };
     }
 
     /**
