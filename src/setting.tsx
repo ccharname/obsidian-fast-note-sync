@@ -1562,7 +1562,7 @@ export class SettingTab extends PluginSettingTab {
             }
           }),
       )
-      this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.sync.attachment_limit_desc"))
+      this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.sync.attachment_limit_desc") + "\n" + $("setting.sync.hash_sampling_desc"))
     }
 
     new Setting(set).setName($("setting.sync.note_limit")).addText((text) =>

@@ -67,6 +67,7 @@ export default {
   "setting.sync.binary_limit_desc": "开启后，将不再同步超出限制大小的附件，以降低移动端 OOM 风险。关闭后则不限制大小。",
   "setting.sync.attachment_limit": "附件同步最大限制 (MB)",
   "setting.sync.attachment_limit_desc": "输入可同步的附件文件最大体积限制（单位为 MB）。默认值为 50MB。",
+  "setting.sync.hash_sampling_desc": "超过 10MB 的文件按头/中/尾采样计算哈希，而非计算全部内容。",
   "setting.sync.note_limit": "笔记同步最大限制 (MB)",
   "setting.sync.note_limit_desc": "输入可同步的 Markdown 笔记文件最大体积限制（单位为 MB）。默认值为 20MB。",
   "setting.sync.hash_limit_toggle": "限制单次同步哈希计算数量",

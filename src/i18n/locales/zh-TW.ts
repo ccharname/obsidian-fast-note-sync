@@ -67,6 +67,7 @@ export default {
   "setting.sync.binary_limit_desc": "開啟後，將不再同步超出限制大小的附件，以降低行動裝置 OOM 風險。關閉後則不限制大小。",
   "setting.sync.attachment_limit": "附件同步最大限制 (MB)",
   "setting.sync.attachment_limit_desc": "輸入可同步的附件檔案最大體積限制（單位為 MB）。預設值為 50MB。",
+  "setting.sync.hash_sampling_desc": "超過 10MB 的檔案將按頭/中/尾採樣計算雜湊，而非計算全部內容。",
   "setting.sync.note_limit": "筆記同步最大限制 (MB)",
   "setting.sync.note_limit_desc": "輸入可同步的 Markdown 筆記檔案最大體積限制（單位為 MB）。預設值為 20MB。",
   "setting.sync.hash_limit_toggle": "限制單次同步雜湊計算數量",

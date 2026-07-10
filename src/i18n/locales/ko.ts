@@ -67,6 +67,7 @@ export default {
   "setting.sync.binary_limit_desc": "이 옵션을 활성화하면 제한 크기를 초과하는 첨부 파일은 동기화되지 않아 모바일 OOM(메모리 부족) 위험을 줄입니다. 비활성화하면 크기 제한이 적용되지 않습니다.",
   "setting.sync.attachment_limit": "첨부 파일 동기화 최대 제한 (MB)",
   "setting.sync.attachment_limit_desc": "동기화할 수 있는 첨부 파일의 최대 크기 제한을 입력하세요(단위: MB). 기본값은 50MB입니다.",
+  "setting.sync.hash_sampling_desc": "10MB를 초과하는 파일은 전체 내용이 아닌 머리/중간/꼬리 부분을 샘플링하여 해시를 계산합니다.",
   "setting.sync.note_limit": "노트 동기화 최대 제한 (MB)",
   "setting.sync.note_limit_desc": "동기화할 수 있는 Markdown 노트 파일의 최대 크기 제한을 입력하세요(단위: MB). 기본값은 20MB입니다.",
   "setting.sync.hash_limit_toggle": "동기화당 해시 계산 수 제한",

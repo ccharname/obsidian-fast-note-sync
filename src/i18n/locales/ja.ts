@@ -67,6 +67,7 @@ export default {
   "setting.sync.binary_limit_desc": "有効にすると、制限サイズを超える添付ファイルの同期を停止し、モバイル端末での OOM（Out Of Memory）リスクを低減します。無効にすると、サイズ制限は適用されません。",
   "setting.sync.attachment_limit": "添付ファイル同期の最大制限 (MB)",
   "setting.sync.attachment_limit_desc": "同期可能な添付ファイルの最大サイズ（単位: MB）を入力してください。デフォルト値は 50MB です。",
+  "setting.sync.hash_sampling_desc": "10MB を超えるファイルは、全内容ではなく先頭/中間/末尾をサンプリングしてハッシュを計算します。",
   "setting.sync.note_limit": "ノート同期の最大制限 (MB)",
   "setting.sync.note_limit_desc": "同期可能な Markdown ノートファイルの最大サイズ（単位: MB）を入力してください。デフォルト値は 20MB です。",
   "setting.sync.hash_limit_toggle": "1回の同期でのハッシュ計算数を制限",

@@ -67,6 +67,7 @@ export default {
   "setting.sync.binary_limit_desc": "When enabled, attachments exceeding the size limit will no longer be synchronized to reduce the risk of Out-Of-Memory (OOM) errors on mobile devices. When disabled, there is no size limit.",
   "setting.sync.attachment_limit": "Maximum Attachment Sync Limit (MB)",
   "setting.sync.attachment_limit_desc": "Enter the maximum file size limit (in MB) for synchronizable attachment files. The default value is 50MB.",
+  "setting.sync.hash_sampling_desc": "For files larger than 10MB, the hash is calculated by sampling the head/middle/tail sections instead of the full content.",
   "setting.sync.note_limit": "Maximum Note Sync Limit (MB)",
   "setting.sync.note_limit_desc": "Enter the maximum file size limit (in MB) for synchronizable Markdown note files. The default value is 20MB.",
   "setting.sync.hash_limit_toggle": "Limit hash calculation count per sync",

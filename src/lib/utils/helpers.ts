@@ -428,8 +428,19 @@ const FILE_HASH_THRESHOLD = 10 * 1024 * 1024 // 10MB
 const FILE_HASH_SLICE_SIZE = 5 * 1024 * 1024 // 5MB
 
 /**
+ * 计算大文件中段采样起始偏移：以文件中点为中心取一个切片长度的区间，并夹紧到有效范围内
+ * Calculate the start offset of the middle sample slice for large files: centered on the
+ * file's midpoint, clamped to a valid range.
+ */
+function computeMidSliceStart(size: number): number {
+  const idealStart = Math.floor(size / 2) - Math.floor(FILE_HASH_SLICE_SIZE / 2)
+  const maxStart = Math.max(0, size - FILE_HASH_SLICE_SIZE)
+  return Math.min(Math.max(0, idealStart), maxStart)
+}
+
+/**
  * 对 ArrayBuffer 进行哈希 (统一采用 JS 数字滚动哈希以保持一致性)
- * 对于超过 10MB 的数据，仅计算前 5MB 和后 5MB 的哈希值。
+ * 对于超过 10MB 的数据，仅计算前 5MB、中间 5MB (以文件中点为中心) 和后 5MB 的哈希值。
  * 分段计算并适时让出主线程，防止大文件导致 UI 卡顿 (Processed in chunks to yield main thread)
  */
 export const hashArrayBuffer = async function (buffer: ArrayBuffer): Promise<string> {
@@ -439,17 +450,20 @@ export const hashArrayBuffer = async function (buffer: ArrayBuffer): Promise<str
   if (size <= FILE_HASH_THRESHOLD) {
     view = new Uint8Array(buffer)
   } else {
-    // 大文件优化：拼接前 5MB 和后 5MB (Optimize for large files: slice first and last 5MB)
-    view = new Uint8Array(FILE_HASH_SLICE_SIZE * 2)
+    // 大文件优化：拼接前 5MB、中间 5MB 和后 5MB (Optimize for large files: slice first, middle, and last 5MB)
+    view = new Uint8Array(FILE_HASH_SLICE_SIZE * 3)
     const fullView = new Uint8Array(buffer)
 
     // 添加边界保护：确保 subarray 不会超出 view 的预留空间 (Boundary protection: ensure subarray fits in view)
     const headLen = Math.min(size, FILE_HASH_SLICE_SIZE)
     const tailLen = Math.min(size, FILE_HASH_SLICE_SIZE)
     const tailStart = Math.max(0, size - tailLen)
+    const midStart = computeMidSliceStart(size)
+    const midLen = Math.min(FILE_HASH_SLICE_SIZE, size - midStart)
 
     view.set(fullView.subarray(0, headLen), 0)
-    view.set(fullView.subarray(tailStart, size), FILE_HASH_SLICE_SIZE)
+    view.set(fullView.subarray(midStart, midStart + midLen), FILE_HASH_SLICE_SIZE)
+    view.set(fullView.subarray(tailStart, size), FILE_HASH_SLICE_SIZE * 2)
   }
 
   return await computeRollingHash(view)
@@ -493,7 +507,7 @@ async function readRange(app: App, path: string, offset: number, length: number)
 }
 
 /**
- * 直接通过文件路径计算哈希 (优化：大文件仅读取首尾，避免 OOM)
+ * 直接通过文件路径计算哈希 (优化：大文件仅读取头/中/尾，避免 OOM)
  * Calculate hash directly from file path (Optimization: read only head/tail for large files to avoid OOM)
  */
 export const hashFileAsync = async function (app: App, path: string): Promise<string> {
@@ -508,32 +522,38 @@ export const hashFileAsync = async function (app: App, path: string): Promise<st
     const buffer = await app.vault.adapter.readBinary(path)
     view = new Uint8Array(buffer)
   } else {
-    // 大文件优化：优先使用 fetch + Range 仅读取前 5MB 和后 5MB (Large file optimization: try fetch first/last 5MB)
+    // 大文件优化：优先使用 fetch + Range 仅读取前 5MB、中间 5MB 和后 5MB (Large file optimization: try fetch head/middle/tail 5MB)
+    const midOffset = computeMidSliceStart(size)
     try {
       const head = await readRange(app, path, 0, FILE_HASH_SLICE_SIZE)
+      const mid = await readRange(app, path, midOffset, Math.min(FILE_HASH_SLICE_SIZE, size - midOffset))
       const tailOffset = Math.max(0, size - FILE_HASH_SLICE_SIZE)
       const tail = await readRange(app, path, tailOffset, FILE_HASH_SLICE_SIZE)
 
-      view = new Uint8Array(FILE_HASH_SLICE_SIZE * 2)
+      view = new Uint8Array(FILE_HASH_SLICE_SIZE * 3)
       const headUint8 = new Uint8Array(head)
+      const midUint8 = new Uint8Array(mid)
       const tailUint8 = new Uint8Array(tail)
 
       // 强制截断至标准切片大小，防止 Uint8Array.set 越界 (Force slice to standard size to prevent RangeError)
       view.set(headUint8.subarray(0, Math.min(headUint8.length, FILE_HASH_SLICE_SIZE)), 0)
-      view.set(tailUint8.subarray(0, Math.min(tailUint8.length, FILE_HASH_SLICE_SIZE)), FILE_HASH_SLICE_SIZE)
+      view.set(midUint8.subarray(0, Math.min(midUint8.length, FILE_HASH_SLICE_SIZE)), FILE_HASH_SLICE_SIZE)
+      view.set(tailUint8.subarray(0, Math.min(tailUint8.length, FILE_HASH_SLICE_SIZE)), FILE_HASH_SLICE_SIZE * 2)
     } catch (e) {
       dump(`hashFileAsync: readRange failed or timeout, falling back to full read for ${path}: ${(e as Error).message}`);
       // 兜底方案：加载完整文件内容 (Fallback: read full file)
       const buffer = await app.vault.adapter.readBinary(path)
       const fullView = new Uint8Array(buffer)
-      view = new Uint8Array(FILE_HASH_SLICE_SIZE * 2)
+      view = new Uint8Array(FILE_HASH_SLICE_SIZE * 3)
 
       const headLen = Math.min(size, FILE_HASH_SLICE_SIZE)
       const tailLen = Math.min(size, FILE_HASH_SLICE_SIZE)
       const tailStart = Math.max(0, size - tailLen)
+      const midLen = Math.min(FILE_HASH_SLICE_SIZE, size - midOffset)
 
       view.set(fullView.subarray(0, headLen), 0)
-      view.set(fullView.subarray(tailStart, size), FILE_HASH_SLICE_SIZE)
+      view.set(fullView.subarray(midOffset, midOffset + midLen), FILE_HASH_SLICE_SIZE)
+      view.set(fullView.subarray(tailStart, size), FILE_HASH_SLICE_SIZE * 2)
     }
   }
 
