@@ -201,9 +201,9 @@ export const noteRename = async function (file: TAbstractFile, oldfile: string, 
         oldPathHash: hashContent(oldfile),
       }
 
-      // 将重命名信息推入 FIFO 队列，等待服务端 NoteRenameAck 后再更新 hashManager
-      // Push rename info to FIFO queue, update hashManager only after server NoteRenameAck
-      plugin.pendingNoteRenames.push({ oldPath: oldfile, newPath: file.path, contentHash })
+      // 将重命名信息存入 Map（key 为 newPath），等待服务端 NoteRenameAck 按 path 精确匹配后再更新 hashManager
+      // Store rename info in Map (keyed by newPath), update hashManager only after server NoteRenameAck matches by path
+      plugin.pendingNoteRenames.set(file.path, { oldPath: oldfile, newPath: file.path, contentHash })
       await plugin.concurrencyLimiter.waitForSlot(file.path, true)
       void plugin.websocket.SendMessage("NoteRename", data)
       dump(`Note rename send`, data.path, data.pathHash)
@@ -636,12 +636,22 @@ export const receiveNoteModifyAck = function (data: { lastTime?: number; path?: 
   plugin.recordSyncCompleted('note', pushPageIndex)
 }
 
-// 收到 NoteRenameAck，从 FIFO 队列取出待确认条目并更新 hashManager
-// Receive NoteRenameAck, shift from FIFO queue and update hashManager
-export const receiveNoteRenameAck = function (data: { lastTime?: number }, plugin: FastSync) {
-  // TCP 保证有序，FIFO 匹配正确
-  // TCP guarantees ordering, FIFO matching is correct
-  const pending = plugin.pendingNoteRenames.shift()
+// 收到 NoteRenameAck，按 data.path 精确匹配待确认条目并更新 hashManager；老服务端不下发 path 时回退 FIFO
+// Receive NoteRenameAck, match pending entry precisely by data.path and update hashManager; falls back to FIFO when legacy server omits path
+export const receiveNoteRenameAck = function (data: { lastTime?: number; path?: string }, plugin: FastSync) {
+  let pending: { oldPath: string; newPath: string; contentHash: string } | undefined
+  if (data.path) {
+    pending = plugin.pendingNoteRenames.get(data.path)
+    if (pending) plugin.pendingNoteRenames.delete(data.path)
+  } else {
+    // 老服务端未下发 path，回退 FIFO（Map 插入顺序取首个）
+    // Legacy server omits path, fall back to FIFO (first inserted entry in Map order)
+    const firstKey = plugin.pendingNoteRenames.keys().next().value
+    if (firstKey !== undefined) {
+      pending = plugin.pendingNoteRenames.get(firstKey)
+      plugin.pendingNoteRenames.delete(firstKey)
+    }
+  }
   if (pending) {
     plugin.fileHashManager.removeFileHash(pending.oldPath)
     // 重命名 Ack 时，内容哈希未变，尝试获取新路径的文件信息

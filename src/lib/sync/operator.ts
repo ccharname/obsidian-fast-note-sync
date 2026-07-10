@@ -232,7 +232,7 @@ export const receiveOperators: Map<WSAction.WSReceiveAction, OperatorHandler> = 
   [WSAction.NoteSyncDelete, receiveNoteSyncDelete],
   [WSAction.NoteSyncRename, receiveNoteSyncRename],
   [WSAction.NoteModifyAck, (data, plugin) => receiveNoteModifyAck(data as { lastTime?: number; path?: string }, plugin)],
-  [WSAction.NoteRenameAck, (data, plugin) => receiveNoteRenameAck(data as { lastTime?: number }, plugin)],
+  [WSAction.NoteRenameAck, (data, plugin) => receiveNoteRenameAck(data as { lastTime?: number; path?: string }, plugin)],
   [WSAction.NoteDeleteAck, (data, plugin) => receiveNoteDeleteAck(data as { lastTime?: number; path?: string }, plugin)],
   [WSAction.NoteSyncEnd, (data, plugin) => receiveSyncEndWrapper(data, plugin, "note")],
   [WSAction.FileUpload, receiveFileUpload],
@@ -517,7 +517,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
     plugin.pendingFileRenames = []
     // 清空上一次连接的未完成笔记 rename 队列，由 hashManager 旧路径进 delNotes 自然处理
     // Clear pending note renames from previous connection; old paths in hashManager will naturally go into delNotes
-    plugin.pendingNoteRenames = []
+    plugin.pendingNoteRenames = new Map()
     // 清空 pending 删除路径集合，避免旧 of pending 条目干扰本次同步
     // Clear pending delete path sets to avoid stale entries interfering with this sync
     plugin.pendingDeleteNotePaths.clear()
@@ -1081,7 +1081,7 @@ export function cancelSync(plugin: FastSync): void {
 
   // 清理待确认与重命名队列 / Clear pending queues and renames
   plugin.pendingFileRenames = [];
-  plugin.pendingNoteRenames = [];
+  plugin.pendingNoteRenames = new Map();
   plugin.pendingDeleteNotePaths.clear();
   plugin.pendingDeleteFilePaths.clear();
   plugin.pendingDeleteFolderPaths.clear();

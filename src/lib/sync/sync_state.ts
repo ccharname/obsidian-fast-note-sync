@@ -139,10 +139,12 @@ export class SyncState {
    */
   pendingFileRenames: { oldPath: string; newPath: string; contentHash: string }[] = [];
   /**
-   * 待确认的笔记重命名队列，等待服务端 NoteRenameAck 后再更新 hashManager（FIFO）
-   * Pending note rename FIFO queue, update hashManager only after server NoteRenameAck
+   * 待确认的笔记重命名映射，key 为 newPath，等待服务端 NoteRenameAck（按 path 精确匹配）后再更新 hashManager；
+   * 老服务端不下发 path 时回退 FIFO（按 Map 插入顺序取首个）
+   * Pending note rename map keyed by newPath, update hashManager only after server NoteRenameAck
+   * (matched precisely by path); falls back to FIFO (first inserted entry) when legacy server omits path
    */
-  pendingNoteRenames: { oldPath: string; newPath: string; contentHash: string }[] = [];
+  pendingNoteRenames: Map<string, { oldPath: string; newPath: string; contentHash: string }> = new Map();
   /**
    * 待确认的文件上传 hash 映射，等待服务端 FileUploadAck 后再写入 hashManager
    * Pending upload hash map, update hashManager only after server FileUploadAck
