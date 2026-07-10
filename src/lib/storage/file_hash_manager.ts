@@ -105,6 +105,19 @@ export class FileHashManager {
 
       dump(`FileHashManager: 开始遍历 ${totalFiles} 个文件`);
 
+      // --- PERF: bounded concurrency for cold-build read+hash ---
+      // 冷建路径原先完全串行 read+hash，参照 operator.ts 扫描阶段的 6 路有限并发改造
+      const MAX_CONCURRENT_HASH = 6;
+      const hashInFlight = new Set<Promise<void>>();
+      const scheduleHashTask = async (task: () => Promise<void>) => {
+        let p: Promise<void>;
+        p = task().finally(() => hashInFlight.delete(p));
+        hashInFlight.add(p);
+        if (hashInFlight.size >= MAX_CONCURRENT_HASH) {
+          await Promise.race(hashInFlight);
+        }
+      };
+
       for (const file of files) {
         // 跳过已排除的文件
         if (isPathExcluded(file.path, this.plugin)) {
@@ -112,36 +125,39 @@ export class FileHashManager {
           continue;
         }
 
-        try {
-          let contentHash: string;
-
-          // 根据文件类型选择不同的哈希计算方式
-          if (file.extension === "md") {
-            // md 文件使用文本内容计算哈希
-            let content: string | null = await this.plugin.app.vault.read(file);
-            contentHash = await hashContentAsync(content);
-            content = null; // 显式释放引用 (Explicitly release reference)
-          } else {
-
-            if (isLargeBinarySyncRisk(file.stat.size, this.plugin)) {
-              dump(`FileHashManager: skip large binary hash (${describeBinarySyncLimit(this.plugin)} limit): ${file.path}`, file.stat.size);
-              continue;
-            }
-            contentHash = await hashFileAsync(this.plugin.app, file.path);
-            logMemorySnapshot(`after hash ${file.path}`);
-          }
-
-          this.hashMap.set(file.path, {
-            hash: contentHash,
-            mtime: file.stat.mtime,
-            size: file.stat.size
-          });
-        } catch (error) {
-          // 单个文件哈希计算失败不应中断整个构建过程
-          const msg = error instanceof Error ? error.message : String(error);
-          dump(`FileHashManager: 计算哈希失败，跳过文件: ${file.path}`, error);
-          console.warn(`[FastNoteSync] 跳过文件 ${file.path}: ${msg}`);
+        if (file.extension !== "md" && isLargeBinarySyncRisk(file.stat.size, this.plugin)) {
+          dump(`FileHashManager: skip large binary hash (${describeBinarySyncLimit(this.plugin)} limit): ${file.path}`, file.stat.size);
+          processedFiles++;
+          continue;
         }
+
+        await scheduleHashTask(async () => {
+          try {
+            let contentHash: string;
+
+            // 根据文件类型选择不同的哈希计算方式
+            if (file.extension === "md") {
+              // md 文件使用文本内容计算哈希
+              let content: string | null = await this.plugin.app.vault.read(file);
+              contentHash = await hashContentAsync(content);
+              content = null; // 显式释放引用 (Explicitly release reference)
+            } else {
+              contentHash = await hashFileAsync(this.plugin.app, file.path);
+              logMemorySnapshot(`after hash ${file.path}`);
+            }
+
+            this.hashMap.set(file.path, {
+              hash: contentHash,
+              mtime: file.stat.mtime,
+              size: file.stat.size
+            });
+          } catch (error) {
+            // 单个文件哈希计算失败不应中断整个构建过程
+            const msg = error instanceof Error ? error.message : String(error);
+            dump(`FileHashManager: 计算哈希失败，跳过文件: ${file.path}`, error);
+            console.warn(`[FastNoteSync] 跳过文件 ${file.path}: ${msg}`);
+          }
+        });
 
         processedFiles++;
 
@@ -151,6 +167,11 @@ export class FileHashManager {
           // 让出主线程,避免阻塞 UI
           await new Promise(resolve => window.setTimeout(resolve, 0));
         }
+      }
+
+      // 等待所有并发哈希任务收尾，确保后续落盘基于完整结果
+      if (hashInFlight.size > 0) {
+        await Promise.all(Array.from(hashInFlight));
       }
 
       // 保存到 localStorage

@@ -115,6 +115,19 @@ export class ConfigHashManager {
 
             dump(`ConfigHashManager: 开始遍历 ${totalConfigs} 个配置`);
 
+            // --- PERF: bounded concurrency for cold-build read+hash ---
+            // 冷建路径原先完全串行 read+hash，参照 operator.ts 扫描阶段的 6 路有限并发改造
+            const MAX_CONCURRENT_HASH = 6;
+            const hashInFlight = new Set<Promise<void>>();
+            const scheduleHashTask = async (task: () => Promise<void>) => {
+                let p: Promise<void>;
+                p = task().finally(() => hashInFlight.delete(p));
+                hashInFlight.add(p);
+                if (hashInFlight.size >= MAX_CONCURRENT_HASH) {
+                    await Promise.race(hashInFlight);
+                }
+            };
+
             for (const path of allPaths) {
                 // 跳过已排除的配置
                 if (configIsPathExcluded(path, this.plugin)) {
@@ -122,33 +135,35 @@ export class ConfigHashManager {
                     continue;
                 }
 
-                let contentHash: string;
+                await scheduleHashTask(async () => {
+                    let contentHash: string;
 
-                // 检查是否为 LocalStorage 虚拟路径
-                if (path.startsWith(this.plugin.localStorageManager.syncPathPrefix)) {
-                    const key = this.plugin.localStorageManager.pathToKey(path);
-                    if (key) {
-                        let value: string | null = this.plugin.localStorageManager.getItemValue(key);
-                        if (value) {
-                            contentHash = await hashContentAsync(value);
-                            this.hashMap.set(path, { hash: contentHash, mtime: 0, size: 0 });
-                            value = null; // 显式释放引用 (Explicitly release reference)
+                    // 检查是否为 LocalStorage 虚拟路径
+                    if (path.startsWith(this.plugin.localStorageManager.syncPathPrefix)) {
+                        const key = this.plugin.localStorageManager.pathToKey(path);
+                        if (key) {
+                            let value: string | null = this.plugin.localStorageManager.getItemValue(key);
+                            if (value) {
+                                contentHash = await hashContentAsync(value);
+                                this.hashMap.set(path, { hash: contentHash, mtime: 0, size: 0 });
+                                value = null; // 显式释放引用 (Explicitly release reference)
+                            }
+                        }
+                    } else {
+                        // 从文件系统读取配置文件
+                        // 注意：configAllPaths 返回的已经是相对于 Vault 的路径，无需再拼接 configDir
+                        const filePath = normalizePath(path);
+                        try {
+                            const stat = await this.plugin.app.vault.adapter.stat(filePath);
+                            if (stat) {
+                                contentHash = await hashFileAsync(this.plugin.app, filePath);
+                                this.hashMap.set(path, { hash: contentHash, mtime: stat.mtime, size: stat.size });
+                            }
+                        } catch (error) {
+                            dumpError("读取配置文件出错:", error);
                         }
                     }
-                } else {
-                    // 从文件系统读取配置文件
-                    // 注意：configAllPaths 返回的已经是相对于 Vault 的路径，无需再拼接 configDir
-                    const filePath = normalizePath(path);
-                    try {
-                        const stat = await this.plugin.app.vault.adapter.stat(filePath);
-                        if (stat) {
-                            contentHash = await hashFileAsync(this.plugin.app, filePath);
-                            this.hashMap.set(path, { hash: contentHash, mtime: stat.mtime, size: stat.size });
-                        }
-                    } catch (error) {
-                        dumpError("读取配置文件出错:", error);
-                    }
-                }
+                });
 
                 processedConfigs++;
 
@@ -158,6 +173,11 @@ export class ConfigHashManager {
                     // 让出主线程,避免阻塞 UI
                     await new Promise(resolve => window.setTimeout(resolve, 0));
                 }
+            }
+
+            // 等待所有并发哈希任务收尾，确保后续落盘基于完整结果
+            if (hashInFlight.size > 0) {
+                await Promise.all(Array.from(hashInFlight));
             }
 
             // 保存到 localStorage
