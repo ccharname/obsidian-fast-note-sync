@@ -615,6 +615,21 @@ export const getSafeCtime = function (stat: { ctime?: number; mtime?: number }):
 export const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
 
 /**
+ * 让出主线程 (优先 MessageChannel, 避免 setTimeout(0) 被 Chromium 钳制到 4ms)
+ */
+export const yieldToMain = (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (typeof MessageChannel !== "undefined") {
+      const channel = new MessageChannel()
+      channel.port1.onmessage = () => resolve()
+      channel.port2.postMessage(null)
+    } else {
+      window.setTimeout(resolve, 0)
+    }
+  })
+}
+
+/**
  * 防抖函数
  */
 export function debounce<T extends (...args: unknown[]) => unknown>(func: T, wait: number): (...args: Parameters<T>) => void {
