@@ -639,6 +639,58 @@
   font-size: 0.9em;
 }
 
+.conflict-resolve-modal .modal {
+  width: 900px;
+  max-width: 90vw;
+  height: auto;
+  max-height: 85vh;
+}
+.conflict-resolve-modal .modal-title {
+  display: flex;
+  align-items: center;
+}
+.conflict-resolve-modal .modal-title .title-prefix {
+  color: var(--text-faint);
+  font-weight: normal;
+  margin-right: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.conflict-resolve-modal .modal-title .title-path {
+  font-size: 0.9em;
+}
+.conflict-resolve-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.conflict-resolve-diff-wrap {
+  max-height: calc(85vh - 180px);
+}
+.conflict-resolve-loading,
+.conflict-resolve-warning {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.conflict-resolve-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.conflict-resolve-actions button {
+  cursor: pointer;
+}
+.conflict-resolve-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.fns-conflict-notice-text {
+  cursor: pointer;
+}
+
 .note-history-view {
   display: flex;
   flex-direction: column;
