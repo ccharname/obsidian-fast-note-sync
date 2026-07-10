@@ -310,6 +310,7 @@ export default {
   "ui.log.filter_category": "类别筛选",
   "ui.log.filter_type": "方向筛选",
   "ui.log.filter_all": "全部",
+  "ui.log.filter_only_failed": "仅看失败",
   "ui.log.category_note": "笔记",
   "ui.log.category_attachment": "附件",
   "ui.log.category_folder": "目录",
@@ -392,7 +393,20 @@ export default {
   "ui.log.action.SettingSyncClear": "同步清理远端配置",
   "ui.log.action.ShareSyncRefresh": "分享状态刷新",
 
-
+  // --- ui.log.error_code ---
+  "ui.log.error_code.300": "服务器发生内部错误，请稍后重试。(错误码: ${code})",
+  "ui.log.error_code.302": "服务器当前繁忙，请稍后重试。(错误码: ${code})",
+  "ui.log.error_code.303": "请求过于频繁，请放慢速度后重试。(错误码: ${code})",
+  "ui.log.error_code.305": "请求参数不合法。(错误码: ${code})",
+  "ui.log.error_code.307": "缺少授权令牌，请重新连接该库。(错误码: ${code})",
+  "ui.log.error_code.308": "会话已过期或已被吊销，请重新连接该库。(错误码: ${code})",
+  "ui.log.error_code.309": "授权令牌无效或不完整，请重新导入连接。(错误码: ${code})",
+  "ui.log.error_code.310": "授权令牌已过期，请重新连接该库。(错误码: ${code})",
+  "ui.log.error_code.312": "授权令牌被限制在其他 IP 地址使用。(错误码: ${code})",
+  "ui.log.error_code.420": "未找到远端库，它可能已在服务器上被删除。(错误码: ${code})",
+  "ui.log.error_code.463": "未找到文件上传会话或该会话已过期，文件将自动重新上传。(错误码: ${code})",
+  "ui.log.error_code.530": "检测到同步冲突，请查看库中生成的冲突副本。(错误码: ${code})",
+  "ui.log.error_code.unknown": "同步失败 (错误码: ${code})",
 
 
   // --- ui.button ---

@@ -993,10 +993,18 @@ export default class FastSync extends Plugin {
 
   }
 
-  async activateLogView() {
+  async activateLogView(onlyFailed?: boolean) {
     const { workspace } = this.app;
     const rightSplit = workspace.rightSplit;
     const leaves = workspace.getLeavesOfType(SYNC_LOG_VIEW_TYPE);
+
+    if (onlyFailed) {
+      // 供尚未挂载的新日志视图在 onOpen 时消费一次；已挂载的视图则靠下方的 workspace 事件即时切换
+      // Consumed once by a freshly-mounted log view on open; an already-mounted view switches
+      // immediately via the workspace event triggered below
+      SyncLogManager.getInstance().requestOnlyFailedFilter();
+      workspace.trigger('fns:log-view-set-only-failed');
+    }
 
     if (leaves.length > 0) {
       const leaf = leaves[0];

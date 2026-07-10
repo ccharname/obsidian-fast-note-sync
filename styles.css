@@ -470,6 +470,22 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
+}
+
+.fns-status-bar-failed-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background-color: var(--text-error);
+  color: var(--text-on-accent);
+  font-size: 9px;
+  line-height: 14px;
+  cursor: pointer;
 }
 
 .fast-note-sync-progress-bar {

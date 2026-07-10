@@ -309,6 +309,7 @@ export default {
   "ui.log.filter_category": "類別篩選",
   "ui.log.filter_type": "方向篩選",
   "ui.log.filter_all": "全部",
+  "ui.log.filter_only_failed": "僅看失敗",
   "ui.log.category_note": "筆記",
   "ui.log.category_attachment": "附件",
   "ui.log.category_folder": "目錄",
@@ -391,7 +392,20 @@ export default {
   "ui.log.action.SettingSyncClear": "同步清理遠端配置",
   "ui.log.action.ShareSyncRefresh": "分享狀態刷新",
 
-
+  // --- ui.log.error_code ---
+  "ui.log.error_code.300": "伺服器發生內部錯誤，請稍後重試。(錯誤碼: ${code})",
+  "ui.log.error_code.302": "伺服器目前繁忙，請稍後重試。(錯誤碼: ${code})",
+  "ui.log.error_code.303": "請求過於頻繁，請放慢速度後重試。(錯誤碼: ${code})",
+  "ui.log.error_code.305": "請求參數不合法。(錯誤碼: ${code})",
+  "ui.log.error_code.307": "缺少授權權杖，請重新連接該庫。(錯誤碼: ${code})",
+  "ui.log.error_code.308": "工作階段已過期或已被撤銷，請重新連接該庫。(錯誤碼: ${code})",
+  "ui.log.error_code.309": "授權權杖無效或不完整，請重新匯入連接。(錯誤碼: ${code})",
+  "ui.log.error_code.310": "授權權杖已過期，請重新連接該庫。(錯誤碼: ${code})",
+  "ui.log.error_code.312": "授權權杖被限制在其他 IP 位址使用。(錯誤碼: ${code})",
+  "ui.log.error_code.420": "找不到遠端庫，它可能已在伺服器上被刪除。(錯誤碼: ${code})",
+  "ui.log.error_code.463": "找不到檔案上傳工作階段或該工作階段已過期，檔案將自動重新上傳。(錯誤碼: ${code})",
+  "ui.log.error_code.530": "偵測到同步衝突，請查看庫中產生的衝突副本。(錯誤碼: ${code})",
+  "ui.log.error_code.unknown": "同步失敗 (錯誤碼: ${code})",
 
 
   // --- ui.button ---

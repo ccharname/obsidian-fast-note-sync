@@ -308,6 +308,7 @@ export default {
   "ui.log.filter_category": "カテゴリフィルター",
   "ui.log.filter_type": "方向フィルター",
   "ui.log.filter_all": "すべて",
+  "ui.log.filter_only_failed": "失敗のみ表示",
   "ui.log.category_note": "ノート",
   "ui.log.category_attachment": "添付ファイル",
   "ui.log.category_folder": "フォルダ",
@@ -390,7 +391,20 @@ export default {
   "ui.log.action.SettingSyncClear": "同期リモート設定のクリア",
   "ui.log.action.ShareSyncRefresh": "共有ステータスの更新",
 
-
+  // --- ui.log.error_code ---
+  "ui.log.error_code.300": "サーバーで内部エラーが発生しました。しばらくしてから再試行してください。(コード: ${code})",
+  "ui.log.error_code.302": "サーバーが現在混雑しています。しばらくしてから再試行してください。(コード: ${code})",
+  "ui.log.error_code.303": "リクエストが多すぎます。少し間隔を空けて再試行してください。(コード: ${code})",
+  "ui.log.error_code.305": "リクエストのパラメーターが不正です。(コード: ${code})",
+  "ui.log.error_code.307": "認証トークンがありません。このVaultを再接続してください。(コード: ${code})",
+  "ui.log.error_code.308": "セッションが期限切れまたは失効しています。このVaultを再接続してください。(コード: ${code})",
+  "ui.log.error_code.309": "認証トークンが無効または不完全です。接続を再インポートしてください。(コード: ${code})",
+  "ui.log.error_code.310": "認証トークンの有効期限が切れています。このVaultを再接続してください。(コード: ${code})",
+  "ui.log.error_code.312": "認証トークンは別のIPアドレスに制限されています。(コード: ${code})",
+  "ui.log.error_code.420": "リモートVaultが見つかりません。サーバー側で削除された可能性があります。(コード: ${code})",
+  "ui.log.error_code.463": "ファイルアップロードセッションが見つからないか期限切れです。ファイルは自動的に再アップロードされます。(コード: ${code})",
+  "ui.log.error_code.530": "同期の競合が検出されました。Vault内に作成された競合コピーを確認してください。(コード: ${code})",
+  "ui.log.error_code.unknown": "同期に失敗しました (コード: ${code})",
 
 
   // --- ui.button ---

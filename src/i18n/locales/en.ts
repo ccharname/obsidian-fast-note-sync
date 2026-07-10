@@ -310,6 +310,7 @@ export default {
   "ui.log.filter_category": "Category Filter",
   "ui.log.filter_type": "Direction Filter",
   "ui.log.filter_all": "All",
+  "ui.log.filter_only_failed": "Failed Only",
   "ui.log.category_note": "Note",
   "ui.log.category_attachment": "Attachment",
   "ui.log.category_folder": "Folder",
@@ -392,7 +393,20 @@ export default {
   "ui.log.action.SettingSyncClear": "Sync clear remote configuration",
   "ui.log.action.ShareSyncRefresh": "Share status refresh",
 
-
+  // --- ui.log.error_code ---
+  "ui.log.error_code.300": "The server encountered an internal error. Please try again later. (Code: ${code})",
+  "ui.log.error_code.302": "The server is currently busy. Please try again in a moment. (Code: ${code})",
+  "ui.log.error_code.303": "Too many requests. Please slow down and try again shortly. (Code: ${code})",
+  "ui.log.error_code.305": "The request contained invalid parameters. (Code: ${code})",
+  "ui.log.error_code.307": "Authorization token is missing. Please reconnect this vault. (Code: ${code})",
+  "ui.log.error_code.308": "This session has expired or been revoked. Please reconnect this vault. (Code: ${code})",
+  "ui.log.error_code.309": "Authorization token is invalid or incomplete. Please re-import your connection. (Code: ${code})",
+  "ui.log.error_code.310": "Authorization token has expired. Please reconnect this vault. (Code: ${code})",
+  "ui.log.error_code.312": "Authorization token is restricted to a different IP address. (Code: ${code})",
+  "ui.log.error_code.420": "The remote vault could not be found. It may have been deleted on the server. (Code: ${code})",
+  "ui.log.error_code.463": "The file upload session was not found or has expired; the file will be re-uploaded automatically. (Code: ${code})",
+  "ui.log.error_code.530": "A sync conflict was detected. Check the conflict copy created in your vault. (Code: ${code})",
+  "ui.log.error_code.unknown": "Sync failed (Code: ${code})",
 
 
   // --- ui.button ---

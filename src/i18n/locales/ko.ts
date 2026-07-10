@@ -308,6 +308,7 @@ export default {
   "ui.log.filter_category": "카테고리 필터",
   "ui.log.filter_type": "방향 필터",
   "ui.log.filter_all": "전체",
+  "ui.log.filter_only_failed": "실패만 보기",
   "ui.log.category_note": "노트",
   "ui.log.category_attachment": "첨부 파일",
   "ui.log.category_folder": "폴더",
@@ -390,7 +391,20 @@ export default {
   "ui.log.action.SettingSyncClear": "원격 설정 동기화 정리",
   "ui.log.action.ShareSyncRefresh": "공유 상태 새로고침",
 
-
+  // --- ui.log.error_code ---
+  "ui.log.error_code.300": "서버에서 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요. (코드: ${code})",
+  "ui.log.error_code.302": "서버가 현재 사용량이 많습니다. 잠시 후 다시 시도해 주세요. (코드: ${code})",
+  "ui.log.error_code.303": "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요. (코드: ${code})",
+  "ui.log.error_code.305": "요청 매개변수가 올바르지 않습니다. (코드: ${code})",
+  "ui.log.error_code.307": "인증 토큰이 없습니다. 이 Vault를 다시 연결해 주세요. (코드: ${code})",
+  "ui.log.error_code.308": "세션이 만료되었거나 취소되었습니다. 이 Vault를 다시 연결해 주세요. (코드: ${code})",
+  "ui.log.error_code.309": "인증 토큰이 유효하지 않거나 불완전합니다. 연결을 다시 가져와 주세요. (코드: ${code})",
+  "ui.log.error_code.310": "인증 토큰이 만료되었습니다. 이 Vault를 다시 연결해 주세요. (코드: ${code})",
+  "ui.log.error_code.312": "인증 토큰이 다른 IP 주소로 제한되어 있습니다. (코드: ${code})",
+  "ui.log.error_code.420": "원격 Vault를 찾을 수 없습니다. 서버에서 삭제되었을 수 있습니다. (코드: ${code})",
+  "ui.log.error_code.463": "파일 업로드 세션을 찾을 수 없거나 만료되었습니다. 파일이 자동으로 다시 업로드됩니다. (코드: ${code})",
+  "ui.log.error_code.530": "동기화 충돌이 감지되었습니다. Vault에 생성된 충돌 사본을 확인해 주세요. (코드: ${code})",
+  "ui.log.error_code.unknown": "동기화 실패 (코드: ${code})",
 
 
   // --- ui.button ---

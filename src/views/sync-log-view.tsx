@@ -313,9 +313,33 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
     // 筛选与分页状态
     const [categoryFilter, setCategoryFilter] = React.useState<string>('all');
     const [typeFilter, setTypeFilter] = React.useState<string>('all');
+    // "仅看失败"：懒初始化时消费一次 SyncLogManager 上挂起的标记（状态栏点红点跳转时设置）
+    // "Failed only": lazily consume the pending flag set on SyncLogManager once (set when jumping
+    // in from the status bar red dot)
+    const [onlyFailed, setOnlyFailed] = React.useState<boolean>(
+        () => SyncLogManager.getInstance().consumePendingOnlyFailedFilter()
+    );
     const [showMobileFilters, setShowMobileFilters] = React.useState<boolean>(false);
     const [currentPage, setCurrentPage] = React.useState<number>(1);
     const pageSize = 20;
+
+    React.useEffect(() => {
+        if (onlyFailed) {
+            SyncLogManager.getInstance().markFailedSeen();
+        }
+    }, [onlyFailed]);
+
+    React.useEffect(() => {
+        // 已挂载状态下，状态栏点击红点跳转也走此事件切到"仅看失败"
+        // While already mounted, clicking the status bar red dot also switches via this event
+        const handler = () => setOnlyFailed(true);
+        (plugin.app.workspace as unknown as { on: (name: string, cb: () => void) => void })
+            .on('fns:log-view-set-only-failed', handler);
+        return () => {
+            (plugin.app.workspace as unknown as { off: (name: string, cb: () => void) => void })
+                .off('fns:log-view-set-only-failed', handler);
+        };
+    }, [plugin]);
 
     React.useEffect(() => {
         const handleSettingsChange = () => {
@@ -381,11 +405,21 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = 0; // 切换筛选/分页时回到顶部
         }
-    }, [currentPage, categoryFilter, typeFilter]);
+    }, [currentPage, categoryFilter, typeFilter, onlyFailed]);
 
     // 筛选逻辑
     const filteredLogs = React.useMemo(() => {
         const list = logs.filter(log => {
+            const matchVault = !log.vault || log.vault === plugin.settings.vault;
+            if (!matchVault) return false;
+
+            // "仅看失败"独立于类别/方向筛选：只看失败项，跳过小结/扫描等非失败卡片
+            // "Failed only" is independent of category/direction filters: only failed items,
+            // skipping non-failure cards like summaries/scans
+            if (onlyFailed) {
+                return log.status === 'error';
+            }
+
             if (log.category === 'summary') {
                 const showSummary = (categoryFilter === 'all' || categoryFilter === 'other') && typeFilter === 'all';
                 if (!showSummary) return false;
@@ -394,8 +428,7 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
                 const matchType = typeFilter === 'all' || log.type === typeFilter;
                 if (!matchCategory || !matchType) return false;
             }
-            const matchVault = !log.vault || log.vault === plugin.settings.vault;
-            return matchVault;
+            return true;
         });
 
         return list.sort((a, b) => {
@@ -407,7 +440,7 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
             }
             return b.timestamp - a.timestamp;
         });
-    }, [logs, categoryFilter, typeFilter, plugin.settings.vault]);
+    }, [logs, categoryFilter, typeFilter, onlyFailed, plugin.settings.vault]);
 
     // 分页逻辑
     const paginatedLogs = React.useMemo(() => {
@@ -420,7 +453,7 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
     // 当筛选条件改变时重置页码
     React.useEffect(() => {
         setCurrentPage(1);
-    }, [categoryFilter, typeFilter]);
+    }, [categoryFilter, typeFilter, onlyFailed]);
 
     const clearLogs = () => {
         void SyncLogManager.getInstance().clearLogs();
@@ -492,6 +525,16 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
             });
         });
 
+        // "仅看失败"独立开关
+        // "Failed only" standalone toggle
+        menu.addSeparator();
+        menu.addItem((item: MenuItem) => {
+            item.setTitle($("ui.log.filter_only_failed"))
+                .setIcon("octagon-alert")
+                .setChecked(onlyFailed)
+                .onClick(() => setOnlyFailed(prev => !prev));
+        });
+
         menu.addSeparator();
         menu.addItem((item: MenuItem) => {
             item.setTitle($("ui.button.reset"))
@@ -499,6 +542,7 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
                 .onClick(() => {
                     setCategoryFilter('all');
                     setTypeFilter('all');
+                    setOnlyFailed(false);
                 });
         });
 
@@ -536,7 +580,7 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
                     </button>
                     <button
                         onClick={showFilterMenu}
-                        className={`fns-sync-log-clear-btn clickable-icon ${showMobileFilters ? 'is-active' : ''}`}
+                        className={`fns-sync-log-clear-btn clickable-icon ${(showMobileFilters || onlyFailed) ? 'is-active' : ''}`}
                         title={$("ui.log.filter")}
                     >
                         <ObsidianIcon icon="filter" />
@@ -584,12 +628,23 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
                             ))}
                         </div>
                     </div>
+                    <div className="filter-group">
+                        <div className="filter-chips">
+                            <div
+                                className={`filter-chip ${onlyFailed ? 'is-active' : ''}`}
+                                onClick={() => setOnlyFailed(prev => !prev)}
+                            >
+                                {$("ui.log.filter_only_failed")}
+                            </div>
+                        </div>
+                    </div>
                     <div className="filter-footer">
-                        <button 
+                        <button
                             className="filter-reset-btn"
                             onClick={() => {
                                 setCategoryFilter('all');
                                 setTypeFilter('all');
+                                setOnlyFailed(false);
                             }}
                         >
                             {$("ui.button.reset")}

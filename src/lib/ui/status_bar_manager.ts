@@ -2,6 +2,7 @@
 
 import { setIcon } from 'obsidian';
 import type FastSync from '../../main';
+import { SyncLogManager } from '../sync/sync_log_manager';
 
 /**
  * Manages the status bar progress indicator.
@@ -17,6 +18,9 @@ export class StatusBarManager {
   private statusBarFill: HTMLElement | null = null;
   private statusBarPct: HTMLElement | null = null;
   private statusBarCheck: HTMLElement | null = null;
+  // 失败项红点 / Failed-item red dot badge
+  private statusBarFailedBadge: HTMLElement | null = null;
+  private unsubscribeFailedCount: (() => void) | null = null;
 
   // Progress protection / 进度值保护，确保不回退
   private lastPct = 0;
@@ -49,6 +53,29 @@ export class StatusBarManager {
 
     // Create percentage or text node / 创建百分比或文本节点
     this.statusBarPct = this.statusBarItem.createDiv("fast-note-sync-progress-text fns-progress-pct");
+
+    // Create failed-item red dot badge, hidden until there are unread failures.
+    // 创建失败项红点，未读失败数为 0 时隐藏。
+    this.statusBarFailedBadge = this.statusBarItem.createSpan("fns-status-bar-failed-badge fns-hidden");
+
+    // Clicking the status bar jumps into the log view filtered to "failed only" and clears the badge.
+    // 点击状态栏跳转到日志视图并自动切到"仅看失败"，同时清除红点。
+    this.statusBarItem.addEventListener("click", () => {
+      if (SyncLogManager.getInstance().getUnreadFailedCount() > 0) {
+        void this.plugin.activateLogView(true);
+      }
+    });
+
+    this.unsubscribeFailedCount = SyncLogManager.getInstance().subscribeUnreadFailedCount((count) => {
+      if (!this.statusBarFailedBadge) return;
+      if (count > 0) {
+        this.statusBarFailedBadge.removeClass("fns-hidden");
+        this.statusBarFailedBadge.setText(count > 99 ? "99+" : String(count));
+      } else {
+        this.statusBarFailedBadge.addClass("fns-hidden");
+        this.statusBarFailedBadge.setText("");
+      }
+    });
   }
 
   /**
@@ -56,6 +83,10 @@ export class StatusBarManager {
    * 卸载时移除状态栏。
    */
   unload(): void {
+    if (this.unsubscribeFailedCount) {
+      this.unsubscribeFailedCount();
+      this.unsubscribeFailedCount = null;
+    }
     if (this.statusBarItem) {
       this.statusBarItem.remove();
       this.statusBarItem = null;
