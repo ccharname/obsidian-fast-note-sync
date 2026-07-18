@@ -1,5 +1,5 @@
 import * as $protobuf from "protobufjs";
-import Long = require("long");
+import Long from "long";
 
 /** Namespace proto. */
 export namespace proto {
@@ -11,8 +11,7 @@ export namespace proto {
          * Properties of a WSMessage.
          * @deprecated Use proto.v1.WSMessage.$Properties instead.
          */
-        interface IWSMessage extends proto.v1.WSMessage.$Properties {
-        }
+        type IWSMessage = proto.v1.WSMessage.$Properties;
 
         /** Represents a WSMessage. */
         class WSMessage {
@@ -134,8 +133,7 @@ export namespace proto {
          * Properties of a WSResponse.
          * @deprecated Use proto.v1.WSResponse.$Properties instead.
          */
-        interface IWSResponse extends proto.v1.WSResponse.$Properties {
-        }
+        type IWSResponse = proto.v1.WSResponse.$Properties;
 
         /** Represents a WSResponse. */
         class WSResponse {
@@ -293,8 +291,7 @@ export namespace proto {
          * Properties of a ClientInfoMessage.
          * @deprecated Use proto.v1.ClientInfoMessage.$Properties instead.
          */
-        interface IClientInfoMessage extends proto.v1.ClientInfoMessage.$Properties {
-        }
+        type IClientInfoMessage = proto.v1.ClientInfoMessage.$Properties;
 
         /** Represents a ClientInfoMessage. */
         class ClientInfoMessage {
@@ -476,8 +473,7 @@ export namespace proto {
          * Properties of a HistoricalVersion.
          * @deprecated Use proto.v1.HistoricalVersion.$Properties instead.
          */
-        interface IHistoricalVersion extends proto.v1.HistoricalVersion.$Properties {
-        }
+        type IHistoricalVersion = proto.v1.HistoricalVersion.$Properties;
 
         /** Represents a HistoricalVersion. */
         class HistoricalVersion {
@@ -599,8 +595,7 @@ export namespace proto {
          * Properties of a CheckVersionInfo.
          * @deprecated Use proto.v1.CheckVersionInfo.$Properties instead.
          */
-        interface ICheckVersionInfo extends proto.v1.CheckVersionInfo.$Properties {
-        }
+        type ICheckVersionInfo = proto.v1.CheckVersionInfo.$Properties;
 
         /** Represents a CheckVersionInfo. */
         class CheckVersionInfo {
@@ -812,8 +807,7 @@ export namespace proto {
          * Properties of a NoteSyncCheckRequest.
          * @deprecated Use proto.v1.NoteSyncCheckRequest.$Properties instead.
          */
-        interface INoteSyncCheckRequest extends proto.v1.NoteSyncCheckRequest.$Properties {
-        }
+        type INoteSyncCheckRequest = proto.v1.NoteSyncCheckRequest.$Properties;
 
         /** Represents a NoteSyncCheckRequest. */
         class NoteSyncCheckRequest {
@@ -953,8 +947,7 @@ export namespace proto {
          * Properties of a NoteSyncDelNote.
          * @deprecated Use proto.v1.NoteSyncDelNote.$Properties instead.
          */
-        interface INoteSyncDelNote extends proto.v1.NoteSyncDelNote.$Properties {
-        }
+        type INoteSyncDelNote = proto.v1.NoteSyncDelNote.$Properties;
 
         /** Represents a NoteSyncDelNote. */
         class NoteSyncDelNote {
@@ -1076,8 +1069,7 @@ export namespace proto {
          * Properties of a NoteSyncRequest.
          * @deprecated Use proto.v1.NoteSyncRequest.$Properties instead.
          */
-        interface INoteSyncRequest extends proto.v1.NoteSyncRequest.$Properties {
-        }
+        type INoteSyncRequest = proto.v1.NoteSyncRequest.$Properties;
 
         /** Represents a NoteSyncRequest. */
         class NoteSyncRequest {
@@ -1235,8 +1227,7 @@ export namespace proto {
          * Properties of a NoteModifyOrCreateRequest.
          * @deprecated Use proto.v1.NoteModifyOrCreateRequest.$Properties instead.
          */
-        interface INoteModifyOrCreateRequest extends proto.v1.NoteModifyOrCreateRequest.$Properties {
-        }
+        type INoteModifyOrCreateRequest = proto.v1.NoteModifyOrCreateRequest.$Properties;
 
         /** Represents a NoteModifyOrCreateRequest. */
         class NoteModifyOrCreateRequest {
@@ -1412,8 +1403,7 @@ export namespace proto {
          * Properties of a NoteUpdateCheckRequest.
          * @deprecated Use proto.v1.NoteUpdateCheckRequest.$Properties instead.
          */
-        interface INoteUpdateCheckRequest extends proto.v1.NoteUpdateCheckRequest.$Properties {
-        }
+        type INoteUpdateCheckRequest = proto.v1.NoteUpdateCheckRequest.$Properties;
 
         /** Represents a NoteUpdateCheckRequest. */
         class NoteUpdateCheckRequest {
@@ -1559,8 +1549,7 @@ export namespace proto {
          * Properties of a NoteDeleteRequest.
          * @deprecated Use proto.v1.NoteDeleteRequest.$Properties instead.
          */
-        interface INoteDeleteRequest extends proto.v1.NoteDeleteRequest.$Properties {
-        }
+        type INoteDeleteRequest = proto.v1.NoteDeleteRequest.$Properties;
 
         /** Represents a NoteDeleteRequest. */
         class NoteDeleteRequest {
@@ -1694,8 +1683,7 @@ export namespace proto {
          * Properties of a NoteRenameRequest.
          * @deprecated Use proto.v1.NoteRenameRequest.$Properties instead.
          */
-        interface INoteRenameRequest extends proto.v1.NoteRenameRequest.$Properties {
-        }
+        type INoteRenameRequest = proto.v1.NoteRenameRequest.$Properties;
 
         /** Represents a NoteRenameRequest. */
         class NoteRenameRequest {
@@ -1841,8 +1829,7 @@ export namespace proto {
          * Properties of a NoteGetRequest.
          * @deprecated Use proto.v1.NoteGetRequest.$Properties instead.
          */
-        interface INoteGetRequest extends proto.v1.NoteGetRequest.$Properties {
-        }
+        type INoteGetRequest = proto.v1.NoteGetRequest.$Properties;
 
         /** Represents a NoteGetRequest. */
         class NoteGetRequest {
@@ -1976,8 +1963,7 @@ export namespace proto {
          * Properties of a NoteSyncModifyMessage.
          * @deprecated Use proto.v1.NoteSyncModifyMessage.$Properties instead.
          */
-        interface INoteSyncModifyMessage extends proto.v1.NoteSyncModifyMessage.$Properties {
-        }
+        type INoteSyncModifyMessage = proto.v1.NoteSyncModifyMessage.$Properties;
 
         /** Represents a NoteSyncModifyMessage. */
         class NoteSyncModifyMessage {
@@ -2129,8 +2115,7 @@ export namespace proto {
          * Properties of a NoteSyncDeleteMessage.
          * @deprecated Use proto.v1.NoteSyncDeleteMessage.$Properties instead.
          */
-        interface INoteSyncDeleteMessage extends proto.v1.NoteSyncDeleteMessage.$Properties {
-        }
+        type INoteSyncDeleteMessage = proto.v1.NoteSyncDeleteMessage.$Properties;
 
         /** Represents a NoteSyncDeleteMessage. */
         class NoteSyncDeleteMessage {
@@ -2276,8 +2261,7 @@ export namespace proto {
          * Properties of a NoteSyncRenameMessage.
          * @deprecated Use proto.v1.NoteSyncRenameMessage.$Properties instead.
          */
-        interface INoteSyncRenameMessage extends proto.v1.NoteSyncRenameMessage.$Properties {
-        }
+        type INoteSyncRenameMessage = proto.v1.NoteSyncRenameMessage.$Properties;
 
         /** Represents a NoteSyncRenameMessage. */
         class NoteSyncRenameMessage {
@@ -2441,8 +2425,7 @@ export namespace proto {
          * Properties of a NoteSyncMtimeMessage.
          * @deprecated Use proto.v1.NoteSyncMtimeMessage.$Properties instead.
          */
-        interface INoteSyncMtimeMessage extends proto.v1.NoteSyncMtimeMessage.$Properties {
-        }
+        type INoteSyncMtimeMessage = proto.v1.NoteSyncMtimeMessage.$Properties;
 
         /** Represents a NoteSyncMtimeMessage. */
         class NoteSyncMtimeMessage {
@@ -2576,8 +2559,7 @@ export namespace proto {
          * Properties of a NoteSyncEndMessage.
          * @deprecated Use proto.v1.NoteSyncEndMessage.$Properties instead.
          */
-        interface INoteSyncEndMessage extends proto.v1.NoteSyncEndMessage.$Properties {
-        }
+        type INoteSyncEndMessage = proto.v1.NoteSyncEndMessage.$Properties;
 
         /** Represents a NoteSyncEndMessage. */
         class NoteSyncEndMessage {
@@ -2717,8 +2699,7 @@ export namespace proto {
          * Properties of a NoteSyncNeedPushMessage.
          * @deprecated Use proto.v1.NoteSyncNeedPushMessage.$Properties instead.
          */
-        interface INoteSyncNeedPushMessage extends proto.v1.NoteSyncNeedPushMessage.$Properties {
-        }
+        type INoteSyncNeedPushMessage = proto.v1.NoteSyncNeedPushMessage.$Properties;
 
         /** Represents a NoteSyncNeedPushMessage. */
         class NoteSyncNeedPushMessage {
@@ -2840,8 +2821,7 @@ export namespace proto {
          * Properties of a NoteModifyAckMessage.
          * @deprecated Use proto.v1.NoteModifyAckMessage.$Properties instead.
          */
-        interface INoteModifyAckMessage extends proto.v1.NoteModifyAckMessage.$Properties {
-        }
+        type INoteModifyAckMessage = proto.v1.NoteModifyAckMessage.$Properties;
 
         /** Represents a NoteModifyAckMessage. */
         class NoteModifyAckMessage {
@@ -2969,8 +2949,7 @@ export namespace proto {
          * Properties of a NoteRenameAckMessage.
          * @deprecated Use proto.v1.NoteRenameAckMessage.$Properties instead.
          */
-        interface INoteRenameAckMessage extends proto.v1.NoteRenameAckMessage.$Properties {
-        }
+        type INoteRenameAckMessage = proto.v1.NoteRenameAckMessage.$Properties;
 
         /** Represents a NoteRenameAckMessage. */
         class NoteRenameAckMessage {
@@ -3098,8 +3077,7 @@ export namespace proto {
          * Properties of a NoteDeleteAckMessage.
          * @deprecated Use proto.v1.NoteDeleteAckMessage.$Properties instead.
          */
-        interface INoteDeleteAckMessage extends proto.v1.NoteDeleteAckMessage.$Properties {
-        }
+        type INoteDeleteAckMessage = proto.v1.NoteDeleteAckMessage.$Properties;
 
         /** Represents a NoteDeleteAckMessage. */
         class NoteDeleteAckMessage {
@@ -3227,8 +3205,7 @@ export namespace proto {
          * Properties of a FileSyncRequest.
          * @deprecated Use proto.v1.FileSyncRequest.$Properties instead.
          */
-        interface IFileSyncRequest extends proto.v1.FileSyncRequest.$Properties {
-        }
+        type IFileSyncRequest = proto.v1.FileSyncRequest.$Properties;
 
         /** Represents a FileSyncRequest. */
         class FileSyncRequest {
@@ -3386,8 +3363,7 @@ export namespace proto {
          * Properties of a FileSyncCheckRequest.
          * @deprecated Use proto.v1.FileSyncCheckRequest.$Properties instead.
          */
-        interface IFileSyncCheckRequest extends proto.v1.FileSyncCheckRequest.$Properties {
-        }
+        type IFileSyncCheckRequest = proto.v1.FileSyncCheckRequest.$Properties;
 
         /** Represents a FileSyncCheckRequest. */
         class FileSyncCheckRequest {
@@ -3533,8 +3509,7 @@ export namespace proto {
          * Properties of a FileSyncDelFile.
          * @deprecated Use proto.v1.FileSyncDelFile.$Properties instead.
          */
-        interface IFileSyncDelFile extends proto.v1.FileSyncDelFile.$Properties {
-        }
+        type IFileSyncDelFile = proto.v1.FileSyncDelFile.$Properties;
 
         /** Represents a FileSyncDelFile. */
         class FileSyncDelFile {
@@ -3656,8 +3631,7 @@ export namespace proto {
          * Properties of a FileUploadCheckRequest.
          * @deprecated Use proto.v1.FileUploadCheckRequest.$Properties instead.
          */
-        interface IFileUploadCheckRequest extends proto.v1.FileUploadCheckRequest.$Properties {
-        }
+        type IFileUploadCheckRequest = proto.v1.FileUploadCheckRequest.$Properties;
 
         /** Represents a FileUploadCheckRequest. */
         class FileUploadCheckRequest {
@@ -3815,8 +3789,7 @@ export namespace proto {
          * Properties of a FileDeleteRequest.
          * @deprecated Use proto.v1.FileDeleteRequest.$Properties instead.
          */
-        interface IFileDeleteRequest extends proto.v1.FileDeleteRequest.$Properties {
-        }
+        type IFileDeleteRequest = proto.v1.FileDeleteRequest.$Properties;
 
         /** Represents a FileDeleteRequest. */
         class FileDeleteRequest {
@@ -3950,8 +3923,7 @@ export namespace proto {
          * Properties of a FileRenameRequest.
          * @deprecated Use proto.v1.FileRenameRequest.$Properties instead.
          */
-        interface IFileRenameRequest extends proto.v1.FileRenameRequest.$Properties {
-        }
+        type IFileRenameRequest = proto.v1.FileRenameRequest.$Properties;
 
         /** Represents a FileRenameRequest. */
         class FileRenameRequest {
@@ -4097,8 +4069,7 @@ export namespace proto {
          * Properties of a FileChunkDownloadRequest.
          * @deprecated Use proto.v1.FileChunkDownloadRequest.$Properties instead.
          */
-        interface IFileChunkDownloadRequest extends proto.v1.FileChunkDownloadRequest.$Properties {
-        }
+        type IFileChunkDownloadRequest = proto.v1.FileChunkDownloadRequest.$Properties;
 
         /** Represents a FileChunkDownloadRequest. */
         class FileChunkDownloadRequest {
@@ -4244,8 +4215,7 @@ export namespace proto {
          * Properties of a FileGetRequest.
          * @deprecated Use proto.v1.FileGetRequest.$Properties instead.
          */
-        interface IFileGetRequest extends proto.v1.FileGetRequest.$Properties {
-        }
+        type IFileGetRequest = proto.v1.FileGetRequest.$Properties;
 
         /** Represents a FileGetRequest. */
         class FileGetRequest {
@@ -4385,8 +4355,7 @@ export namespace proto {
          * Properties of a FileSyncModifyMessage.
          * @deprecated Use proto.v1.FileSyncModifyMessage.$Properties instead.
          */
-        interface IFileSyncModifyMessage extends proto.v1.FileSyncModifyMessage.$Properties {
-        }
+        type IFileSyncModifyMessage = proto.v1.FileSyncModifyMessage.$Properties;
 
         /** Represents a FileSyncModifyMessage. */
         class FileSyncModifyMessage {
@@ -4538,8 +4507,7 @@ export namespace proto {
          * Properties of a FileSyncDeleteMessage.
          * @deprecated Use proto.v1.FileSyncDeleteMessage.$Properties instead.
          */
-        interface IFileSyncDeleteMessage extends proto.v1.FileSyncDeleteMessage.$Properties {
-        }
+        type IFileSyncDeleteMessage = proto.v1.FileSyncDeleteMessage.$Properties;
 
         /** Represents a FileSyncDeleteMessage. */
         class FileSyncDeleteMessage {
@@ -4685,8 +4653,7 @@ export namespace proto {
          * Properties of a FileSyncRenameMessage.
          * @deprecated Use proto.v1.FileSyncRenameMessage.$Properties instead.
          */
-        interface IFileSyncRenameMessage extends proto.v1.FileSyncRenameMessage.$Properties {
-        }
+        type IFileSyncRenameMessage = proto.v1.FileSyncRenameMessage.$Properties;
 
         /** Represents a FileSyncRenameMessage. */
         class FileSyncRenameMessage {
@@ -4850,8 +4817,7 @@ export namespace proto {
          * Properties of a FileSyncMtimeMessage.
          * @deprecated Use proto.v1.FileSyncMtimeMessage.$Properties instead.
          */
-        interface IFileSyncMtimeMessage extends proto.v1.FileSyncMtimeMessage.$Properties {
-        }
+        type IFileSyncMtimeMessage = proto.v1.FileSyncMtimeMessage.$Properties;
 
         /** Represents a FileSyncMtimeMessage. */
         class FileSyncMtimeMessage {
@@ -4985,8 +4951,7 @@ export namespace proto {
          * Properties of a FileSyncEndMessage.
          * @deprecated Use proto.v1.FileSyncEndMessage.$Properties instead.
          */
-        interface IFileSyncEndMessage extends proto.v1.FileSyncEndMessage.$Properties {
-        }
+        type IFileSyncEndMessage = proto.v1.FileSyncEndMessage.$Properties;
 
         /** Represents a FileSyncEndMessage. */
         class FileSyncEndMessage {
@@ -5126,8 +5091,7 @@ export namespace proto {
          * Properties of a FileSyncUploadMessage.
          * @deprecated Use proto.v1.FileSyncUploadMessage.$Properties instead.
          */
-        interface IFileSyncUploadMessage extends proto.v1.FileSyncUploadMessage.$Properties {
-        }
+        type IFileSyncUploadMessage = proto.v1.FileSyncUploadMessage.$Properties;
 
         /** Represents a FileSyncUploadMessage. */
         class FileSyncUploadMessage {
@@ -5261,8 +5225,7 @@ export namespace proto {
          * Properties of a FileSyncDownloadMessage.
          * @deprecated Use proto.v1.FileSyncDownloadMessage.$Properties instead.
          */
-        interface IFileSyncDownloadMessage extends proto.v1.FileSyncDownloadMessage.$Properties {
-        }
+        type IFileSyncDownloadMessage = proto.v1.FileSyncDownloadMessage.$Properties;
 
         /** Represents a FileSyncDownloadMessage. */
         class FileSyncDownloadMessage {
@@ -5420,8 +5383,7 @@ export namespace proto {
          * Properties of a FileRenameAckMessage.
          * @deprecated Use proto.v1.FileRenameAckMessage.$Properties instead.
          */
-        interface IFileRenameAckMessage extends proto.v1.FileRenameAckMessage.$Properties {
-        }
+        type IFileRenameAckMessage = proto.v1.FileRenameAckMessage.$Properties;
 
         /** Represents a FileRenameAckMessage. */
         class FileRenameAckMessage {
@@ -5549,8 +5511,7 @@ export namespace proto {
          * Properties of a FileUploadAckMessage.
          * @deprecated Use proto.v1.FileUploadAckMessage.$Properties instead.
          */
-        interface IFileUploadAckMessage extends proto.v1.FileUploadAckMessage.$Properties {
-        }
+        type IFileUploadAckMessage = proto.v1.FileUploadAckMessage.$Properties;
 
         /** Represents a FileUploadAckMessage. */
         class FileUploadAckMessage {
@@ -5678,8 +5639,7 @@ export namespace proto {
          * Properties of a FileDeleteAckMessage.
          * @deprecated Use proto.v1.FileDeleteAckMessage.$Properties instead.
          */
-        interface IFileDeleteAckMessage extends proto.v1.FileDeleteAckMessage.$Properties {
-        }
+        type IFileDeleteAckMessage = proto.v1.FileDeleteAckMessage.$Properties;
 
         /** Represents a FileDeleteAckMessage. */
         class FileDeleteAckMessage {
@@ -5807,8 +5767,7 @@ export namespace proto {
          * Properties of a SettingSyncRequest.
          * @deprecated Use proto.v1.SettingSyncRequest.$Properties instead.
          */
-        interface ISettingSyncRequest extends proto.v1.SettingSyncRequest.$Properties {
-        }
+        type ISettingSyncRequest = proto.v1.SettingSyncRequest.$Properties;
 
         /** Represents a SettingSyncRequest. */
         class SettingSyncRequest {
@@ -5966,8 +5925,7 @@ export namespace proto {
          * Properties of a SettingSyncCheckRequest.
          * @deprecated Use proto.v1.SettingSyncCheckRequest.$Properties instead.
          */
-        interface ISettingSyncCheckRequest extends proto.v1.SettingSyncCheckRequest.$Properties {
-        }
+        type ISettingSyncCheckRequest = proto.v1.SettingSyncCheckRequest.$Properties;
 
         /** Represents a SettingSyncCheckRequest. */
         class SettingSyncCheckRequest {
@@ -6107,8 +6065,7 @@ export namespace proto {
          * Properties of a SettingSyncDelSetting.
          * @deprecated Use proto.v1.SettingSyncDelSetting.$Properties instead.
          */
-        interface ISettingSyncDelSetting extends proto.v1.SettingSyncDelSetting.$Properties {
-        }
+        type ISettingSyncDelSetting = proto.v1.SettingSyncDelSetting.$Properties;
 
         /** Represents a SettingSyncDelSetting. */
         class SettingSyncDelSetting {
@@ -6230,8 +6187,7 @@ export namespace proto {
          * Properties of a SettingModifyOrCreateRequest.
          * @deprecated Use proto.v1.SettingModifyOrCreateRequest.$Properties instead.
          */
-        interface ISettingModifyOrCreateRequest extends proto.v1.SettingModifyOrCreateRequest.$Properties {
-        }
+        type ISettingModifyOrCreateRequest = proto.v1.SettingModifyOrCreateRequest.$Properties;
 
         /** Represents a SettingModifyOrCreateRequest. */
         class SettingModifyOrCreateRequest {
@@ -6389,8 +6345,7 @@ export namespace proto {
          * Properties of a SettingUpdateCheckRequest.
          * @deprecated Use proto.v1.SettingUpdateCheckRequest.$Properties instead.
          */
-        interface ISettingUpdateCheckRequest extends proto.v1.SettingUpdateCheckRequest.$Properties {
-        }
+        type ISettingUpdateCheckRequest = proto.v1.SettingUpdateCheckRequest.$Properties;
 
         /** Represents a SettingUpdateCheckRequest. */
         class SettingUpdateCheckRequest {
@@ -6536,8 +6491,7 @@ export namespace proto {
          * Properties of a SettingDeleteRequest.
          * @deprecated Use proto.v1.SettingDeleteRequest.$Properties instead.
          */
-        interface ISettingDeleteRequest extends proto.v1.SettingDeleteRequest.$Properties {
-        }
+        type ISettingDeleteRequest = proto.v1.SettingDeleteRequest.$Properties;
 
         /** Represents a SettingDeleteRequest. */
         class SettingDeleteRequest {
@@ -6671,8 +6625,7 @@ export namespace proto {
          * Properties of a SettingGetRequest.
          * @deprecated Use proto.v1.SettingGetRequest.$Properties instead.
          */
-        interface ISettingGetRequest extends proto.v1.SettingGetRequest.$Properties {
-        }
+        type ISettingGetRequest = proto.v1.SettingGetRequest.$Properties;
 
         /** Represents a SettingGetRequest. */
         class SettingGetRequest {
@@ -6800,8 +6753,7 @@ export namespace proto {
          * Properties of a SettingClearRequest.
          * @deprecated Use proto.v1.SettingClearRequest.$Properties instead.
          */
-        interface ISettingClearRequest extends proto.v1.SettingClearRequest.$Properties {
-        }
+        type ISettingClearRequest = proto.v1.SettingClearRequest.$Properties;
 
         /** Represents a SettingClearRequest. */
         class SettingClearRequest {
@@ -6917,8 +6869,7 @@ export namespace proto {
          * Properties of a SettingSyncModifyMessage.
          * @deprecated Use proto.v1.SettingSyncModifyMessage.$Properties instead.
          */
-        interface ISettingSyncModifyMessage extends proto.v1.SettingSyncModifyMessage.$Properties {
-        }
+        type ISettingSyncModifyMessage = proto.v1.SettingSyncModifyMessage.$Properties;
 
         /** Represents a SettingSyncModifyMessage. */
         class SettingSyncModifyMessage {
@@ -7076,8 +7027,7 @@ export namespace proto {
          * Properties of a SettingSyncDeleteMessage.
          * @deprecated Use proto.v1.SettingSyncDeleteMessage.$Properties instead.
          */
-        interface ISettingSyncDeleteMessage extends proto.v1.SettingSyncDeleteMessage.$Properties {
-        }
+        type ISettingSyncDeleteMessage = proto.v1.SettingSyncDeleteMessage.$Properties;
 
         /** Represents a SettingSyncDeleteMessage. */
         class SettingSyncDeleteMessage {
@@ -7217,8 +7167,7 @@ export namespace proto {
          * Properties of a SettingSyncMtimeMessage.
          * @deprecated Use proto.v1.SettingSyncMtimeMessage.$Properties instead.
          */
-        interface ISettingSyncMtimeMessage extends proto.v1.SettingSyncMtimeMessage.$Properties {
-        }
+        type ISettingSyncMtimeMessage = proto.v1.SettingSyncMtimeMessage.$Properties;
 
         /** Represents a SettingSyncMtimeMessage. */
         class SettingSyncMtimeMessage {
@@ -7352,8 +7301,7 @@ export namespace proto {
          * Properties of a SettingSyncEndMessage.
          * @deprecated Use proto.v1.SettingSyncEndMessage.$Properties instead.
          */
-        interface ISettingSyncEndMessage extends proto.v1.SettingSyncEndMessage.$Properties {
-        }
+        type ISettingSyncEndMessage = proto.v1.SettingSyncEndMessage.$Properties;
 
         /** Represents a SettingSyncEndMessage. */
         class SettingSyncEndMessage {
@@ -7493,8 +7441,7 @@ export namespace proto {
          * Properties of a SettingSyncNeedUploadMessage.
          * @deprecated Use proto.v1.SettingSyncNeedUploadMessage.$Properties instead.
          */
-        interface ISettingSyncNeedUploadMessage extends proto.v1.SettingSyncNeedUploadMessage.$Properties {
-        }
+        type ISettingSyncNeedUploadMessage = proto.v1.SettingSyncNeedUploadMessage.$Properties;
 
         /** Represents a SettingSyncNeedUploadMessage. */
         class SettingSyncNeedUploadMessage {
@@ -7610,8 +7557,7 @@ export namespace proto {
          * Properties of a SettingModifyAckMessage.
          * @deprecated Use proto.v1.SettingModifyAckMessage.$Properties instead.
          */
-        interface ISettingModifyAckMessage extends proto.v1.SettingModifyAckMessage.$Properties {
-        }
+        type ISettingModifyAckMessage = proto.v1.SettingModifyAckMessage.$Properties;
 
         /** Represents a SettingModifyAckMessage. */
         class SettingModifyAckMessage {
@@ -7739,8 +7685,7 @@ export namespace proto {
          * Properties of a SettingDeleteAckMessage.
          * @deprecated Use proto.v1.SettingDeleteAckMessage.$Properties instead.
          */
-        interface ISettingDeleteAckMessage extends proto.v1.SettingDeleteAckMessage.$Properties {
-        }
+        type ISettingDeleteAckMessage = proto.v1.SettingDeleteAckMessage.$Properties;
 
         /** Represents a SettingDeleteAckMessage. */
         class SettingDeleteAckMessage {
@@ -7868,8 +7813,7 @@ export namespace proto {
          * Properties of a FolderSyncCheckRequest.
          * @deprecated Use proto.v1.FolderSyncCheckRequest.$Properties instead.
          */
-        interface IFolderSyncCheckRequest extends proto.v1.FolderSyncCheckRequest.$Properties {
-        }
+        type IFolderSyncCheckRequest = proto.v1.FolderSyncCheckRequest.$Properties;
 
         /** Represents a FolderSyncCheckRequest. */
         class FolderSyncCheckRequest {
@@ -7997,8 +7941,7 @@ export namespace proto {
          * Properties of a FolderSyncDelFolder.
          * @deprecated Use proto.v1.FolderSyncDelFolder.$Properties instead.
          */
-        interface IFolderSyncDelFolder extends proto.v1.FolderSyncDelFolder.$Properties {
-        }
+        type IFolderSyncDelFolder = proto.v1.FolderSyncDelFolder.$Properties;
 
         /** Represents a FolderSyncDelFolder. */
         class FolderSyncDelFolder {
@@ -8120,8 +8063,7 @@ export namespace proto {
          * Properties of a FolderSyncRequest.
          * @deprecated Use proto.v1.FolderSyncRequest.$Properties instead.
          */
-        interface IFolderSyncRequest extends proto.v1.FolderSyncRequest.$Properties {
-        }
+        type IFolderSyncRequest = proto.v1.FolderSyncRequest.$Properties;
 
         /** Represents a FolderSyncRequest. */
         class FolderSyncRequest {
@@ -8279,8 +8221,7 @@ export namespace proto {
          * Properties of a FolderCreateRequest.
          * @deprecated Use proto.v1.FolderCreateRequest.$Properties instead.
          */
-        interface IFolderCreateRequest extends proto.v1.FolderCreateRequest.$Properties {
-        }
+        type IFolderCreateRequest = proto.v1.FolderCreateRequest.$Properties;
 
         /** Represents a FolderCreateRequest. */
         class FolderCreateRequest {
@@ -8414,8 +8355,7 @@ export namespace proto {
          * Properties of a FolderDeleteRequest.
          * @deprecated Use proto.v1.FolderDeleteRequest.$Properties instead.
          */
-        interface IFolderDeleteRequest extends proto.v1.FolderDeleteRequest.$Properties {
-        }
+        type IFolderDeleteRequest = proto.v1.FolderDeleteRequest.$Properties;
 
         /** Represents a FolderDeleteRequest. */
         class FolderDeleteRequest {
@@ -8549,8 +8489,7 @@ export namespace proto {
          * Properties of a FolderRenameRequest.
          * @deprecated Use proto.v1.FolderRenameRequest.$Properties instead.
          */
-        interface IFolderRenameRequest extends proto.v1.FolderRenameRequest.$Properties {
-        }
+        type IFolderRenameRequest = proto.v1.FolderRenameRequest.$Properties;
 
         /** Represents a FolderRenameRequest. */
         class FolderRenameRequest {
@@ -8696,8 +8635,7 @@ export namespace proto {
          * Properties of a FolderSyncModifyMessage.
          * @deprecated Use proto.v1.FolderSyncModifyMessage.$Properties instead.
          */
-        interface IFolderSyncModifyMessage extends proto.v1.FolderSyncModifyMessage.$Properties {
-        }
+        type IFolderSyncModifyMessage = proto.v1.FolderSyncModifyMessage.$Properties;
 
         /** Represents a FolderSyncModifyMessage. */
         class FolderSyncModifyMessage {
@@ -8837,8 +8775,7 @@ export namespace proto {
          * Properties of a FolderSyncDeleteMessage.
          * @deprecated Use proto.v1.FolderSyncDeleteMessage.$Properties instead.
          */
-        interface IFolderSyncDeleteMessage extends proto.v1.FolderSyncDeleteMessage.$Properties {
-        }
+        type IFolderSyncDeleteMessage = proto.v1.FolderSyncDeleteMessage.$Properties;
 
         /** Represents a FolderSyncDeleteMessage. */
         class FolderSyncDeleteMessage {
@@ -8978,8 +8915,7 @@ export namespace proto {
          * Properties of a FolderSyncRenameMessage.
          * @deprecated Use proto.v1.FolderSyncRenameMessage.$Properties instead.
          */
-        interface IFolderSyncRenameMessage extends proto.v1.FolderSyncRenameMessage.$Properties {
-        }
+        type IFolderSyncRenameMessage = proto.v1.FolderSyncRenameMessage.$Properties;
 
         /** Represents a FolderSyncRenameMessage. */
         class FolderSyncRenameMessage {
@@ -9131,8 +9067,7 @@ export namespace proto {
          * Properties of a FolderSyncEndMessage.
          * @deprecated Use proto.v1.FolderSyncEndMessage.$Properties instead.
          */
-        interface IFolderSyncEndMessage extends proto.v1.FolderSyncEndMessage.$Properties {
-        }
+        type IFolderSyncEndMessage = proto.v1.FolderSyncEndMessage.$Properties;
 
         /** Represents a FolderSyncEndMessage. */
         class FolderSyncEndMessage {
@@ -9260,8 +9195,7 @@ export namespace proto {
          * Properties of a FolderModifyAckMessage.
          * @deprecated Use proto.v1.FolderModifyAckMessage.$Properties instead.
          */
-        interface IFolderModifyAckMessage extends proto.v1.FolderModifyAckMessage.$Properties {
-        }
+        type IFolderModifyAckMessage = proto.v1.FolderModifyAckMessage.$Properties;
 
         /** Represents a FolderModifyAckMessage. */
         class FolderModifyAckMessage {
@@ -9389,8 +9323,7 @@ export namespace proto {
          * Properties of a FolderRenameAckMessage.
          * @deprecated Use proto.v1.FolderRenameAckMessage.$Properties instead.
          */
-        interface IFolderRenameAckMessage extends proto.v1.FolderRenameAckMessage.$Properties {
-        }
+        type IFolderRenameAckMessage = proto.v1.FolderRenameAckMessage.$Properties;
 
         /** Represents a FolderRenameAckMessage. */
         class FolderRenameAckMessage {
@@ -9518,8 +9451,7 @@ export namespace proto {
          * Properties of a FolderDeleteAckMessage.
          * @deprecated Use proto.v1.FolderDeleteAckMessage.$Properties instead.
          */
-        interface IFolderDeleteAckMessage extends proto.v1.FolderDeleteAckMessage.$Properties {
-        }
+        type IFolderDeleteAckMessage = proto.v1.FolderDeleteAckMessage.$Properties;
 
         /** Represents a FolderDeleteAckMessage. */
         class FolderDeleteAckMessage {
@@ -9647,8 +9579,7 @@ export namespace proto {
          * Properties of a NoteSyncPageMessage.
          * @deprecated Use proto.v1.NoteSyncPageMessage.$Properties instead.
          */
-        interface INoteSyncPageMessage extends proto.v1.NoteSyncPageMessage.$Properties {
-        }
+        type INoteSyncPageMessage = proto.v1.NoteSyncPageMessage.$Properties;
 
         /** Represents a NoteSyncPageMessage. */
         class NoteSyncPageMessage {
@@ -9782,8 +9713,7 @@ export namespace proto {
          * Properties of a NoteSyncPageAckRequest.
          * @deprecated Use proto.v1.NoteSyncPageAckRequest.$Properties instead.
          */
-        interface INoteSyncPageAckRequest extends proto.v1.NoteSyncPageAckRequest.$Properties {
-        }
+        type INoteSyncPageAckRequest = proto.v1.NoteSyncPageAckRequest.$Properties;
 
         /** Represents a NoteSyncPageAckRequest. */
         class NoteSyncPageAckRequest {
@@ -9911,8 +9841,7 @@ export namespace proto {
          * Properties of a FileSyncPageMessage.
          * @deprecated Use proto.v1.FileSyncPageMessage.$Properties instead.
          */
-        interface IFileSyncPageMessage extends proto.v1.FileSyncPageMessage.$Properties {
-        }
+        type IFileSyncPageMessage = proto.v1.FileSyncPageMessage.$Properties;
 
         /** Represents a FileSyncPageMessage. */
         class FileSyncPageMessage {
@@ -10046,8 +9975,7 @@ export namespace proto {
          * Properties of a FileSyncPageAckRequest.
          * @deprecated Use proto.v1.FileSyncPageAckRequest.$Properties instead.
          */
-        interface IFileSyncPageAckRequest extends proto.v1.FileSyncPageAckRequest.$Properties {
-        }
+        type IFileSyncPageAckRequest = proto.v1.FileSyncPageAckRequest.$Properties;
 
         /** Represents a FileSyncPageAckRequest. */
         class FileSyncPageAckRequest {
@@ -10175,8 +10103,7 @@ export namespace proto {
          * Properties of a SettingSyncPageMessage.
          * @deprecated Use proto.v1.SettingSyncPageMessage.$Properties instead.
          */
-        interface ISettingSyncPageMessage extends proto.v1.SettingSyncPageMessage.$Properties {
-        }
+        type ISettingSyncPageMessage = proto.v1.SettingSyncPageMessage.$Properties;
 
         /** Represents a SettingSyncPageMessage. */
         class SettingSyncPageMessage {
@@ -10310,8 +10237,7 @@ export namespace proto {
          * Properties of a SettingSyncPageAckRequest.
          * @deprecated Use proto.v1.SettingSyncPageAckRequest.$Properties instead.
          */
-        interface ISettingSyncPageAckRequest extends proto.v1.SettingSyncPageAckRequest.$Properties {
-        }
+        type ISettingSyncPageAckRequest = proto.v1.SettingSyncPageAckRequest.$Properties;
 
         /** Represents a SettingSyncPageAckRequest. */
         class SettingSyncPageAckRequest {
@@ -10439,8 +10365,7 @@ export namespace proto {
          * Properties of a FolderSyncPageMessage.
          * @deprecated Use proto.v1.FolderSyncPageMessage.$Properties instead.
          */
-        interface IFolderSyncPageMessage extends proto.v1.FolderSyncPageMessage.$Properties {
-        }
+        type IFolderSyncPageMessage = proto.v1.FolderSyncPageMessage.$Properties;
 
         /** Represents a FolderSyncPageMessage. */
         class FolderSyncPageMessage {
@@ -10574,8 +10499,7 @@ export namespace proto {
          * Properties of a FolderSyncPageAckRequest.
          * @deprecated Use proto.v1.FolderSyncPageAckRequest.$Properties instead.
          */
-        interface IFolderSyncPageAckRequest extends proto.v1.FolderSyncPageAckRequest.$Properties {
-        }
+        type IFolderSyncPageAckRequest = proto.v1.FolderSyncPageAckRequest.$Properties;
 
         /** Represents a FolderSyncPageAckRequest. */
         class FolderSyncPageAckRequest {

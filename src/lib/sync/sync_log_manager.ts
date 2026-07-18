@@ -1,5 +1,7 @@
 import { moment } from "obsidian";
 
+const safeMoment = moment as unknown as (inp?: unknown) => { format(format: string): string };
+
 import FastSync from "../../main";
 import { dumpError } from "../utils/helpers";
 import { $ } from "../../i18n/lang";
@@ -506,7 +508,7 @@ export class SyncLogManager {
         if (!this.plugin || !this.logFilePath) return;
 
         try {
-            const timeStr = moment(log.timestamp).format("YYYY-MM-DD HH:mm:ss");
+            const timeStr = safeMoment(log.timestamp).format("YYYY-MM-DD HH:mm:ss");
             const typeStr = log.type.toUpperCase().padEnd(7);
             const categoryStr = log.category.toUpperCase().padEnd(12);
             const statusStr = log.status.toUpperCase().padEnd(8);

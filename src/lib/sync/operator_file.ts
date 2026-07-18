@@ -781,10 +781,8 @@ export const receiveFileSyncUpdate = async function (data: ReceiveFileSyncUpdate
       sessionId: "",
       totalChunks: 0,
       size: data.size,
-      // 所属下载页透传（C3），供分片下载会话最终完成时归账（见 handleFileChunkDownloadComplete）
-      // Owning download page passthrough (C3), consumed when the chunk download session finally
-      // completes (see handleFileChunkDownloadComplete)
       pageIndex: data.pageIndex,
+      initialSlotKey: slotKey,
       ...createDownloadStorage(plugin, `init_${data.pathHash}`, data.size),
     }
     plugin.fileDownloadSessions.set(tempKey, tempSession)
@@ -974,6 +972,7 @@ export const receiveFileSyncChunkDownload = async function (data: FileSyncChunkD
       totalChunks: data.totalChunks,
       size: data.size,
       pageIndex: tempSession.pageIndex,
+      initialSlotKey: tempSession.initialSlotKey,
       ...createDownloadStorage(plugin, data.sessionId, data.size),
     }
     plugin.fileDownloadSessions.set(data.sessionId, session)
@@ -988,6 +987,7 @@ export const receiveFileSyncChunkDownload = async function (data: FileSyncChunkD
       sessionId: data.sessionId,
       totalChunks: data.totalChunks,
       size: data.size,
+      initialSlotKey: `download_${data.path}`,
       ...createDownloadStorage(plugin, data.sessionId, data.size),
     }
     plugin.fileDownloadSessions.set(data.sessionId, session)
@@ -1216,6 +1216,28 @@ export const receiveFileSyncRename = async function (data: { oldPath: string; pa
   const normalizedOldPath = normalizePath(data.oldPath)
   const normalizedNewPath = normalizePath(data.path)
 
+  // Check if there is an active file download session for this old path
+  // 检查本地是否存在该旧路径的活跃下载会话
+  let downloadingSession: FileDownloadSession | undefined
+  for (const sess of plugin.fileDownloadSessions.values()) {
+    if (normalizePath(sess.path) === normalizedOldPath) {
+      downloadingSession = sess
+      break
+    }
+  }
+
+  if (downloadingSession) {
+    dump(`Redirecting active file download session: ${downloadingSession.path} -> ${data.path}`)
+    downloadingSession.path = data.path
+    if (data.contentHash) {
+      downloadingSession.contentHash = data.contentHash
+    }
+    // Session redirected, bypass the rename execution and skip RePush
+    // 会话已成功重定向，直接跳过重命名执行和 RePush
+    plugin.recordSyncCompleted('file', data.pageIndex)
+    return
+  }
+
   await plugin.lockManager.withLock(normalizedNewPath, async () => {
     const file = plugin.app.vault.getFileByPath(normalizedOldPath)
     if (file instanceof TFile) {
@@ -1308,7 +1330,7 @@ export const receiveFileSyncRename = async function (data: { oldPath: string; pa
  * 完成文件下载
  */
 const handleFileChunkDownloadComplete = async function (session: FileDownloadSession, plugin: FastSync) {
-  const slotKey = `download_${session.path}`;
+  const slotKey = session.initialSlotKey || `download_${session.path}`;
   try {
     if (isLargeBinarySyncRisk(session.size, plugin)) {
       dump(`Skip assembling large downloaded attachment (${describeBinarySyncLimit()} limit): ${session.path}`, session.size)

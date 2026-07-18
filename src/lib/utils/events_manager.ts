@@ -4,8 +4,6 @@ import { noteModify, noteDelete, noteRename, noteDeleteByPath } from "../sync/op
 import { fileModify, fileDelete, fileRename, fileDeleteByPath } from "../sync/operator_file";
 import { folderModify, folderDelete, folderRename } from "../sync/operator_folder";
 import { NoteHistoryModal } from "../../views/note-history/history-modal";
-import { ConflictResolveModal } from "../../views/conflict-resolve-modal";
-import { isConflictCopyPath, getOriginalPathFromConflictPath } from "../sync/conflict_manager";
 import { dump, isPathInConfigSyncDirs } from "./helpers";
 import { ShareModal } from "../../views/share-modal";
 import type FastSync from "../../main";
@@ -356,15 +354,5 @@ export class EventManager {
         })
     })
 
-    if (isConflictCopyPath(file.path)) {
-      menu.addItem((item: MenuItem) => {
-        item
-          .setTitle($("ui.conflict.menu_item"))
-          .setIcon("git-merge")
-          .onClick(() => {
-            new ConflictResolveModal(this.plugin.app, this.plugin, getOriginalPathFromConflictPath(file.path), file.path).open()
-          })
-      })
-    }
   }
 }

@@ -239,10 +239,22 @@ export class WebSocketManager {
     this.client.triggerReconnect();
   }
   public SendMessage(action: WSAction.WSSendAction, data: unknown, before?: () => boolean, after?: () => void, context?: string) {
-    return this.client.SendMessage(action, this.injectContext(data, context), before, after);
+    const injectedData = this.injectContext(data, context);
+    return this.client.SendMessage(action, injectedData, before, () => {
+      // Record the send event in sync logs
+      // 在同步日志中记录发送事件
+      SyncLogManager.getInstance().logSentMessage(action, injectedData as object | string, this.plugin.currentSyncType);
+      after?.();
+    });
   }
   public Send(action: WSAction.WSSendAction, data: unknown, after?: () => void, context?: string) {
-    this.client.Send(action, this.injectContext(data, context), after);
+    const injectedData = this.injectContext(data, context);
+    this.client.Send(action, injectedData, () => {
+      // Record the send event in sync logs
+      // 在同步日志中记录发送事件
+      SyncLogManager.getInstance().logSentMessage(action, injectedData as object | string, this.plugin.currentSyncType);
+      after?.();
+    });
   }
 
   /**
@@ -309,7 +321,7 @@ export class WebSocketManager {
         // Old server (no negotiation block): all fields stay at sync_state.ts defaults
         // (negotiated=false, window=0) — current stop-and-wait behavior, unchanged.
         if (data.data) {
-          const nego = data.data as Record<string, unknown>;
+          const nego = data.data;
           let negotiated = false;
           if (typeof nego.syncUpChunkNum === "number") {
             this.plugin.syncState.syncUpChunkNum = nego.syncUpChunkNum;

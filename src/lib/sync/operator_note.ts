@@ -3,7 +3,6 @@ import { TFile, TAbstractFile, normalizePath } from "obsidian";
 import { ReceiveMessage, ReceiveMtimeMessage, ReceivePathMessage, SyncEndData } from "../utils/types";
 import { hashContent, hashContentAsync, dump, dumpError, isPathExcluded, getSafeCtime, vaultDelete, checkAndNotifyCaseConflict } from "../utils/helpers";
 import { SyncLogManager } from "./sync_log_manager";
-import { isConflictCopyPath, notifyConflictDetected } from "./conflict_manager";
 import type FastSync from "../../main";
 
 
@@ -277,11 +276,6 @@ export const receiveNoteSyncModify = async function (data: ReceiveMessage, plugi
             }
           }
           await plugin.app.vault.create(normalizedPath, data.content, { ...(data.ctime > 0 && { ctime: data.ctime }), ...(data.mtime > 0 && { mtime: data.mtime }) })
-          // 落盘的是服务端冲突副本（{name}.conflict.{ts}{ext}）：通知用户 + 记一条冲突同步日志
-          // The note landed on disk is a server-side conflict copy ({name}.conflict.{ts}{ext}): notify the user + log a conflict entry
-          if (isConflictCopyPath(normalizedPath)) {
-            notifyConflictDetected(plugin, normalizedPath)
-          }
         }
         if (data.lastTime && data.lastTime > Number(plugin.localStorageManager.getMetadata("lastNoteSyncTime"))) {
           plugin.localStorageManager.setMetadata("lastNoteSyncTime", data.lastTime)
@@ -652,7 +646,7 @@ export const receiveNoteRenameAck = function (data: { lastTime?: number; path?: 
   } else {
     // 老服务端未下发 path，回退 FIFO（Map 插入顺序取首个）
     // Legacy server omits path, fall back to FIFO (first inserted entry in Map order)
-    const firstKey = plugin.pendingNoteRenames.keys().next().value
+    const firstKey = Array.from(plugin.pendingNoteRenames.keys())[0];
     if (firstKey !== undefined) {
       pending = plugin.pendingNoteRenames.get(firstKey)
       plugin.pendingNoteRenames.delete(firstKey)

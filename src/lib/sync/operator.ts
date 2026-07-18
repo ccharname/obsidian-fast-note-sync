@@ -1117,7 +1117,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
     }, 100);
     plugin.syncState.progressCheckIntervalId = progressCheckInterval;
   } catch (error) {
-    dump("Sync failed with error: " + error);
+    dump("Sync failed with error: " + (error instanceof Error ? error.message : String(error)));
     // 归属判断：只有当前活跃上下文仍是本次会话时才清空/重置，防止旧会话的迟到异常
     // （例如断线重连后旧会话 BatchAck 15s 超时才抛出）把已经在跑的新会话状态清掉
     // Ownership guard: only clear/reset when the active context still belongs to this

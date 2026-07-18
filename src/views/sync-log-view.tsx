@@ -1,6 +1,8 @@
-import { ItemView, WorkspaceLeaf, moment, setIcon, Platform, MenuItem, Menu, TFile, Notice } from "obsidian";
+import { ItemView, WorkspaceLeaf, moment, setIcon, Platform, MenuItem, Menu, TFile, Notice, FileView } from "obsidian";
 import { createRoot, Root } from "react-dom/client";
 import * as React from "react";
+
+const safeMoment = moment as unknown as (inp?: unknown) => { format(format: string): string };
 
 import { SyncLogManager, SyncLog } from "../lib/sync/sync_log_manager";
 import { MenuItemWithInternal } from "../lib/utils/types";
@@ -124,7 +126,7 @@ const SyncSummaryCard = ({ log }: { log: SyncLog }) => {
         );
     };
 
-    const timeStr = moment(log.timestamp).format("HH:mm:ss");
+    const timeStr = safeMoment(log.timestamp).format("HH:mm:ss");
     const isCancelled = log.status === 'cancelled';
     const titleText = isCancelled
         ? (syncType === 'full' 
@@ -171,7 +173,7 @@ const VaultScanningSummaryCard = ({ log }: { log: SyncLog }) => {
     const fileCount = fileMatch ? parseInt(fileMatch[1]) : 0;
     const configCount = configMatch ? parseInt(configMatch[1]) : 0;
 
-    const timeStr = moment(log.timestamp).format("HH:mm:ss");
+    const timeStr = safeMoment(log.timestamp).format("HH:mm:ss");
     
     // 根据 action 区分全量和增量并调用新增的翻译键
     // Distinguish between full and incremental action and load new translation keys
@@ -289,6 +291,21 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
         }
         const file = plugin.app.vault.getAbstractFileByPath(path);
         if (file instanceof TFile) {
+            // 检查文件是否已经在某个叶子（Tab）中打开，如果是则直接切换到该 Tab
+            // Check if the file is already open in any leaf (Tab), if so, switch to that Tab directly
+            let existingLeaf: WorkspaceLeaf | null = null;
+            plugin.app.workspace.iterateAllLeaves((leaf) => {
+                const view = leaf.view;
+                if (view instanceof FileView && view.file && view.file.path === path) {
+                    existingLeaf = leaf;
+                }
+            });
+
+            if (existingLeaf) {
+                plugin.app.workspace.setActiveLeaf(existingLeaf, { focus: true });
+                return;
+            }
+
             try {
                 const leaf = plugin.app.workspace.getLeaf(Platform.isMobile ? false : 'tab');
                 await leaf.openFile(file);
@@ -674,10 +691,18 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
                         if (log.action.startsWith('VaultScanning') && log.status === 'success') {
                             return <VaultScanningSummaryCard key={log.id} log={log} />;
                         }
+                        // 判断是否为删除操作或配置日志。如果是，则点击时复制路径；否则打开文件。
+                        // Determine if it is a delete operation or configuration log. If so, copy the path on click; otherwise, open the file.
+                        const isDeleteType = log.action.toLowerCase().includes('delete');
+                        const isConfigType = log.category === 'config';
+                        const isCopyable = isDeleteType || isConfigType;
+                        const isNoteOrAttachment = ['note', 'attachment'].includes(log.category);
+                        const isOpenable = isNoteOrAttachment && !isDeleteType;
+
                         return (
                             <div key={log.id} className={`fns-sync-log-item fns-sync-log-category-${log.category} fns-sync-log-status-${log.status} fns-sync-log-type-${log.type}`}>
                                 <div className="fns-sync-log-item-header">
-                                    <span className="fns-sync-log-time">{moment(log.timestamp).format("HH:mm:ss")}</span>
+                                    <span className="fns-sync-log-time">{safeMoment(log.timestamp).format("HH:mm:ss")}</span>
                                     <span className="fns-sync-log-action">{$(`ui.log.action.${log.action}` as Parameters<typeof $>[0])}</span>
                                     <span className="fns-sync-log-type-tag">
                                         {log.type === 'send' ? (
@@ -698,10 +723,24 @@ const SyncLogComponent = ({ plugin }: { plugin: FastSync }) => {
                                 </div>
                                 {log.path && (
                                     <div 
-                                        className={`fns-sync-log-path ${['note', 'attachment'].includes(log.category) ? 'is-clickable' : ''}`}
-                                        onClick={() => { if (log.path) void handlePathClick(log.path, log.category); }}
+                                        className={`fns-sync-log-path ${(['note', 'attachment'].includes(log.category) || isCopyable) ? 'is-clickable' : ''}`}
+                                        onClick={() => {
+                                            if (!log.path) return;
+                                            if (isCopyable) {
+                                                void navigator.clipboard.writeText(log.path);
+                                                new Notice($("ui.log.path_copied") || "File path copied");
+                                            } else {
+                                                void handlePathClick(log.path, log.category);
+                                            }
+                                        }}
                                     >
-                                        {log.path}
+                                        <span style={{ wordBreak: 'break-all', flex: 1 }}>{log.path}</span>
+                                        {isCopyable && (
+                                            <ObsidianIcon icon="copy" className="fns-path-copy-icon" />
+                                        )}
+                                        {isOpenable && (
+                                            <ObsidianIcon icon="external-link" className="fns-path-open-icon" />
+                                        )}
                                     </div>
                                 )}
                                 {log.message && !['成功', 'success'].includes(log.message.toLowerCase()) && <div className="fns-sync-log-message">{log.message}</div>}

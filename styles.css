@@ -84,15 +84,13 @@
   color: var(--interactive-accent);
 }
 
-/* stylelint-disable declaration-no-important */
 /* 同步互斥时的禁用菜单项 / Disabled menu item during mutually exclusive sync */
-.fns-menu-item-disabled {
+.menu-item.fns-menu-item-disabled {
   opacity: 0.45;
-  cursor: not-allowed !important;
-  pointer-events: auto !important; /* 保留点击事件以便进行 Notice 提示 / Keep click events for Notice prompt */
+  cursor: not-allowed;
+  pointer-events: auto; /* 保留点击事件以便进行 Notice 提示 / Keep click events for Notice prompt */
 }
 
-/* stylelint-enable declaration-no-important */
 /* 设置页同步指示器预览 / Settings page sync indicator preview */
 .fns-sync-indicator-preview {
   display: inline-flex;
@@ -1267,6 +1265,33 @@
   background-color: rgba(0, 0, 0, 0.03);
   padding: 2px 4px;
   border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.fns-sync-log-container .fns-sync-log-item .fns-sync-log-path .fns-path-copy-icon,
+.fns-sync-log-container .fns-sync-log-item .fns-sync-log-path .fns-path-open-icon {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+}
+.fns-sync-log-container .fns-sync-log-item .fns-sync-log-path .fns-path-copy-icon svg,
+.fns-sync-log-container .fns-sync-log-item .fns-sync-log-path .fns-path-open-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.fns-sync-log-container .fns-sync-log-item .fns-sync-log-path:hover .fns-path-copy-icon,
+.fns-sync-log-container .fns-sync-log-item .fns-sync-log-path:hover .fns-path-open-icon {
+  opacity: 0.8;
+}
+.fns-sync-log-container .fns-sync-log-item .fns-sync-log-path:hover .fns-path-copy-icon:hover,
+.fns-sync-log-container .fns-sync-log-item .fns-sync-log-path:hover .fns-path-open-icon:hover {
+  opacity: 1;
+  color: var(--interactive-accent);
 }
 .fns-sync-log-container .fns-sync-log-item .fns-sync-log-message {
   font-size: 11px;

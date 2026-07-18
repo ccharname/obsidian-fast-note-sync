@@ -314,6 +314,17 @@ export const configIsPathExcluded = function (relativePath: string, plugin: Fast
   const normalizedPath = relativePath.replace(/\\/g, "/")
   const { syncExcludeFolders, syncExcludeWhitelist } = plugin.settings
 
+  // 固定排除插件自身的数据库和缓存文件，无论如何都不进行同步
+  // Hard exclude the plugin's own database and cache files; do not sync them under any circumstances
+  const pluginSelfDir = getPluginDir(plugin)
+  if (
+    normalizedPath === `${pluginSelfDir}/configHashMap.json` ||
+    normalizedPath === `${pluginSelfDir}/fileHashMap.json` ||
+    normalizedPath === `${pluginSelfDir}/folderSnapshot.json`
+  ) {
+    return true
+  }
+
   // 0. 检查白名单 (优先级最高 - 使用共享设置)
   if (syncExcludeWhitelist) {
     const whitelist = parseRules(syncExcludeWhitelist)

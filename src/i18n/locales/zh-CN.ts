@@ -302,6 +302,7 @@ export default {
   "ui.log.debug_title": "调试日志",
   "ui.log.clear": "清空日志",
   "ui.log.copy_all": "复制全部",
+  "ui.log.path_copied": "已复制文件路径",
   "ui.log.empty": "暂无日志",
   "ui.log.file_not_found": "文件不存在或已被删除",
   "ui.log.type_send": "发送",

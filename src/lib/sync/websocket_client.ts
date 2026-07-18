@@ -1,6 +1,8 @@
 import { moment } from "obsidian";
 import { dump, dumpError, isWsUrl, showSyncNotice } from "../utils/helpers";
 
+const safeMoment = moment as unknown as (inp?: unknown) => { format(format: string): string };
+
 // WebSocket 连接常量
 const RECONNECT_BASE_DELAY = 1000; // 重连基础延迟 (毫秒)
 const NON_RECONNECT_REASONS = new Set([
@@ -180,7 +182,7 @@ export class WebSocketClient {
 
       this.ws.onerror = (error: Event) => {
         dump("WebSocket error:", {
-          timestamp: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
+          timestamp: safeMoment().format("YYYY-MM-DD HH:mm:ss.SSS"),
           url: wsUrl,
           readyState: this.ws.readyState,
           error: error
@@ -195,7 +197,7 @@ export class WebSocketClient {
         this.useProtobuf = false;
         this.isOpen = true;
         dump("Service connected", {
-          timestamp: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
+          timestamp: safeMoment().format("YYYY-MM-DD HH:mm:ss.SSS"),
           url: wsUrl
         });
         this.options.onOpen?.(this);
@@ -208,7 +210,7 @@ export class WebSocketClient {
         this.notifyStatusChange(false);
 
         dump("Service close details:", {
-          timestamp: moment().format("YYYY-MM-DD HH:mm:ss.SSS"),
+          timestamp: safeMoment().format("YYYY-MM-DD HH:mm:ss.SSS"),
           code: e.code,
           reason: e.reason,
           wasClean: e.wasClean,

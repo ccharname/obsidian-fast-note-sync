@@ -14,6 +14,7 @@ import { AppWithInternal } from "./lib/utils/types";
 import { RuleEditor } from "./views/rule-editor";
 import { $ } from "./i18n/lang";
 import FastSync from "./main";
+import { createVaultNameChangeHandler } from "./lib/settings/vault_name";
 
 
 export interface PluginSettings {
@@ -215,6 +216,10 @@ export class SettingTab extends PluginSettingTab {
   constructor(app: App, plugin: FastSync) {
     super(app, plugin)
     this.plugin = plugin
+  }
+
+  getSettingDefinitions() {
+    return []
   }
 
   hide(): void {
@@ -604,6 +609,17 @@ export class SettingTab extends PluginSettingTab {
       return node
     }
 
+    const safeProcess = (typeof process !== "undefined" ? process : undefined) as unknown as {
+      platform?: string;
+      arch?: string;
+      versions?: {
+        node?: string;
+        electron?: string;
+        chrome?: string;
+        v8?: string;
+      };
+    } | undefined;
+
     // debug信息，显式脱敏作为主防线
     // debugInfo, Explicit masking is the primary line
     const debugInfo = {
@@ -637,18 +653,17 @@ export class SettingTab extends PluginSettingTab {
         isDesktop: Platform.isDesktopApp,
         isMobile: Platform.isMobile,
         isTablet: Platform.isTablet,
-        platform: typeof process !== "undefined" ? (process.platform ?? "unknown") : "unknown",
-        arch: typeof process !== "undefined" ? (process.arch ?? "unknown") : "unknown",
+        platform: safeProcess?.platform ?? "unknown",
+        arch: safeProcess?.arch ?? "unknown",
         userAgent: "Obsidian/" + ((this.app as unknown as { version: string }).version || "unknown"),
-        versions:
-          typeof process !== "undefined" && process.versions
-            ? {
-              node: process.versions.node,
-              electron: process.versions.electron,
-              chrome: process.versions.chrome,
-              v8: process.versions.v8,
+        versions: safeProcess?.versions
+          ? {
+              node: safeProcess.versions.node,
+              electron: safeProcess.versions.electron,
+              chrome: safeProcess.versions.chrome,
+              v8: safeProcess.versions.v8,
             }
-            : {},
+          : {},
         capacitor: (window as unknown as { Capacitor: { getPlatform(): string; isNative: boolean } }).Capacitor
           ? {
             platform: (window as unknown as { Capacitor: { getPlatform(): string; isNative: boolean } }).Capacitor.getPlatform(),
@@ -817,7 +832,14 @@ export class SettingTab extends PluginSettingTab {
               this.plugin.settings.networkLibrary = backup.networkLibrary
 
               // 重新初始化某些依赖库路径的动态默认值
-              const defaultExcludes = [`${getPluginDir(this.plugin)}/data.json`, `${this.app.vault.configDir}/community-plugins.json`]
+              // Reinitialize dynamic default values for certain dependency library paths
+              const defaultExcludes = [
+                `${getPluginDir(this.plugin)}/data.json`,
+                `${getPluginDir(this.plugin)}/configHashMap.json`,
+                `${getPluginDir(this.plugin)}/fileHashMap.json`,
+                `${getPluginDir(this.plugin)}/folderSnapshot.json`,
+                `${this.app.vault.configDir}/community-plugins.json`,
+              ]
               this.plugin.settings.syncExcludeFolders = JSON.stringify(defaultExcludes.map((pattern) => ({ pattern, caseSensitive: false })))
 
               // 确保客户端名称不被重置
@@ -1294,16 +1316,12 @@ export class SettingTab extends PluginSettingTab {
     )
     this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.remote.api_token_desc"))
 
+    const handleVaultNameChange = createVaultNameChangeHandler(this.plugin)
     new Setting(set).setName($("setting.remote.vault_name")).addText((text) =>
       text
         .setPlaceholder($("setting.remote.vault_name"))
         .setValue(this.plugin.settings.vault)
-        .onChange(async (value) => {
-          this.plugin.wsSettingChange = true
-          this.plugin.settings.vault = value
-          this.plugin.localStorageManager.clearSyncTime()
-          await this.plugin.saveAndReloadServices()
-        }),
+        .onChange(handleVaultNameChange),
     )
     this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.remote.vault_name_desc"))
 

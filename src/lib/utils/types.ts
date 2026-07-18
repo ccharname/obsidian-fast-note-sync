@@ -103,6 +103,7 @@ export interface FileDownloadSession {
     downloadedChunks?: Set<number>;
     /** 所属下载页（0-based），从 receiveFileSyncUpdate 的 pageIndex 透传，供分片下载会话完成时归账（见 ReceiveMessage.pageIndex 注释） */
     pageIndex?: number;
+    initialSlotKey?: string;
 }
 
 export interface ReceiveMtimeMessage {

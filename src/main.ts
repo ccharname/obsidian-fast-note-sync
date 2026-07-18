@@ -221,9 +221,9 @@ export default class FastSync extends Plugin {
   set folderSyncEnd(v: boolean) { this.syncState.folderSyncEnd = v }
 
   // SyncState — pending queues
-  get pendingFileRenames() { return this.syncState.pendingFileRenames }
+  get pendingFileRenames(): SyncState["pendingFileRenames"] { return this.syncState.pendingFileRenames }
   set pendingFileRenames(v: SyncState["pendingFileRenames"]) { this.syncState.pendingFileRenames = v }
-  get pendingNoteRenames() { return this.syncState.pendingNoteRenames }
+  get pendingNoteRenames(): SyncState["pendingNoteRenames"] { return this.syncState.pendingNoteRenames }
   set pendingNoteRenames(v: SyncState["pendingNoteRenames"]) { this.syncState.pendingNoteRenames = v }
   get pendingUploadHashes() { return this.syncState.pendingUploadHashes }
   set pendingUploadHashes(v: Map<string, string>) { this.syncState.pendingUploadHashes = v }
@@ -732,9 +732,13 @@ export default class FastSync extends Plugin {
     }
 
     // 仅在首次安装（无旧数据）时自动添加插件自身目录及核心配置排除
+    // Automatically add this plugin's own directory and core config exclusions only during clean install (no legacy data)
     if (!data) {
       const defaultExcludes = [
         `${pluginSelfDir}/data.json`,
+        `${pluginSelfDir}/configHashMap.json`,
+        `${pluginSelfDir}/fileHashMap.json`,
+        `${pluginSelfDir}/folderSnapshot.json`,
         `${this.app.vault.configDir}/community-plugins.json`,
       ];
       defaultExcludes.forEach(pattern => {
