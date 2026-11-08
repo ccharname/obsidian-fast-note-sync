@@ -70,7 +70,24 @@ export class FileHashManager {
   async initialize(): Promise<void> {
     dump("FileHashManager: 开始初始化");
 
-    // 1. 尝试加载本地最新计算哈希缓存表 (hashMap)
+    // 1. 先加载云端确认同步基准表 (syncHashMap)：后续 hashMap 恢复/重建会调用 saveToStorage，
+    // 它会连带落盘 syncHashMap（localStorage + 镜像），若基准表尚未载入会被空表覆盖而永久丢失
+    const loadedSync = this.loadSyncFromStorage();
+    let hasRestoredSync = false;
+
+    if (loadedSync) {
+      dump(`FileHashManager: 从 localStorage 加载同步基准成功,共 ${this.syncHashMap.size} 个文件`);
+      hasRestoredSync = true;
+    } else {
+      const mirroredSync = await this.syncMirror.read();
+      if (mirroredSync && this.parseAndLoadSync(mirroredSync)) {
+        dump("FileHashManager: 从文件镜像恢复同步基准成功");
+        this.saveSyncToStorage();
+        hasRestoredSync = true;
+      }
+    }
+
+    // 2. 尝试加载本地最新计算哈希缓存表 (hashMap)
     const loaded = this.loadFromStorage();
     let hasRestoredMap = false;
 
@@ -89,22 +106,6 @@ export class FileHashManager {
     if (!hasRestoredMap) {
       dump("FileHashManager: localStorage 与文件镜像均无本地缓存,开始构建哈希映射");
       await this.buildFileHashMap();
-    }
-
-    // 2. 尝试加载云端确认同步基准表 (syncHashMap)
-    const loadedSync = this.loadSyncFromStorage();
-    let hasRestoredSync = false;
-
-    if (loadedSync) {
-      dump(`FileHashManager: 从 localStorage 加载同步基准成功,共 ${this.syncHashMap.size} 个文件`);
-      hasRestoredSync = true;
-    } else {
-      const mirroredSync = await this.syncMirror.read();
-      if (mirroredSync && this.parseAndLoadSync(mirroredSync)) {
-        dump("FileHashManager: 从文件镜像恢复同步基准成功");
-        this.saveSyncToStorage();
-        hasRestoredSync = true;
-      }
     }
 
     // 3. 数据平滑迁移：全新用户或旧版插件升级用户 (syncHashMap 尚未创建但 hashMap 已有历史数据)
