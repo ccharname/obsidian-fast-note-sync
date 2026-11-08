@@ -348,4 +348,174 @@ await test('rename older than the source identity cannot move that newer source 
   assert.equal(sent.length, 0);
 });
 
+await test('real tracker: deferred 13 MiB forced rename behind 20 MiB upload must fetch REMOTE before success', async () => {
+  const { p, put, files, sent, metadata } = fixture();
+  const { SyncProgressTracker } = load('src/lib/sync/sync_progress_tracker.ts');
+  p.progressTracker = new SyncProgressTracker(); p.progressTracker.reset(['note']);
+  p.recordSyncCompleted = (type, pageIndex) => {
+    p.noteSyncTasks.completed++; p.progressTracker.recordCompleted(type, pageIndex);
+  };
+  const base = 'b'.repeat(13 * 1024 * 1024), remote = base.slice(0, -6) + 'REMOTE';
+  put('old.md', base, 50); put('other.md', 'o'.repeat(20 * 1024 * 1024));
+  await p.serverMerge.requestUploadFromDisk('other.md');
+  note.beginNoteSyncRound(p, false);
+  await note.receiveNoteSyncRename({ oldPath: 'old.md', path: 'new.md', contentHash: hash(remote),
+    sha: sha(remote), rev: 100, mtime: 80 }, p);
+  assert.equal(p.serverMerge.debugSizes().deferred, 1);
+  const drained = [], upload = p.serverMerge.requestUploadFromDisk.bind(p.serverMerge);
+  p.serverMerge.requestUploadFromDisk = (path, force) => {
+    const promise = upload(path, force); drained.push({ path, force, promise }); return promise;
+  };
+  const other = sent.find(({ data }) => data.path === 'other.md').data;
+  await p.serverMerge.onAck({ path: 'other.md', opId: other.opId, rev: 101, sha: sha(other.content) });
+  for (const entry of drained) await entry.promise;
+  const renamed = sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'new.md');
+  assert.equal(renamed.length, 1, 'budget drain must send the forced unchanged ancestor');
+  assert.equal(drained[0].force, true);
+  assert.equal(renamed[0].data.baseSha, sha(base));
+  assert.equal(renamed[0].data.content, base);
+  await p.serverMerge.onAck({ path: 'new.md', opId: renamed[0].data.opId, rev: 102,
+    merged: true, content: remote, sha: sha(remote) });
+  await note.receiveNoteSyncEnd({ lastTime: 200, needModifyCount: 1 }, p);
+  p.progressTracker.setDownloadTotal('note', 1);
+  p.progressTracker.recordUploadComplete('note', p.noteSyncTasks.completed);
+  p.progressTracker.recordPageProgress('note', 0, 1, true, true);
+  await note.receiveNoteSyncModify({ path: 'new.md', content: remote, contentHash: hash(remote),
+    sha: sha(remote), rev: 100, mtime: 80, pageIndex: 0 }, p);
+  assert.equal(p.progressTracker.isTypeFullyDone('note'), true);
+  note.commitNoteSyncRound(p);
+  assert.equal(metadata.get('lastNoteSyncTime'), 200);
+  assert.equal(files.get('new.md')?.content, remote, 'successful cursor must include REMOTE, not leave the old ancestor');
+  assert.equal(p.serverMerge.debugSizes().inflight, 0);
+  assert.equal(p.serverMerge.debugSizes().deferred, 0);
+});
+
+await test('forced dirty requests survive ordinary coalescing and both ACK and mtime settle', async () => {
+  for (const entry of ['disk', 'content']) for (const finish of ['ack', 'settle']) {
+    const { p, put, sent } = fixture();
+    put('same.md', 'same', 50);
+    await p.serverMerge.requestUploadFromDisk('same.md', true);
+    const request = force => entry === 'disk' ? p.serverMerge.requestUploadFromDisk('same.md', force)
+      : p.serverMerge.requestUpload('same.md', 'same', hash('same'), force);
+    assert.equal(await request(true), 'dirty');
+    assert.equal(await request(false), 'dirty', 'ordinary edits must not downgrade queued force');
+    if (finish === 'ack') await p.serverMerge.onAck({ path: 'same.md', opId: sent[0].data.opId, rev: 51, sha: sha('same') });
+    else await p.serverMerge.settle('same.md');
+    assert.equal(sent.length, 2, entry + '/' + finish + ': forced clean content must still be sent');
+    await p.serverMerge.onAck({ path: 'same.md', opId: sent[1].data.opId, rev: 52, sha: sha('same') });
+    assert.equal(sent.length, 2, 'force is consumed once, without an endless resend loop');
+    assert.equal(p.serverMerge.debugSizes().dirty, 0);
+  }
+});
+
+await test('force arriving after async content hashing survives the second single-flight check', async () => {
+  const { p, put, sent } = fixture(); put('same.md', 'same', 50);
+  const original = p.serverMerge.env.sha; let unblock;
+  p.serverMerge.env.sha = () => new Promise(resolve => { unblock = resolve; });
+  const queued = p.serverMerge.requestUpload('same.md', 'same', hash('same'), true);
+  p.serverMerge.env.sha = original;
+  await p.serverMerge.requestUploadFromDisk('same.md', true);
+  unblock(sha('same'));
+  assert.equal(await queued, 'dirty');
+  await p.serverMerge.onAck({ path: 'same.md', opId: sent[0].data.opId, rev: 51, sha: sha('same') });
+  assert.equal(sent.length, 2);
+});
+
+await test('busy rename migrates forced old-path dirty work to the new path', async () => {
+  const { p, put, files, sent } = fixture(); put('old.md', 'same', 50);
+  await p.serverMerge.requestUploadFromDisk('old.md', true);
+  await p.app.vault.rename(files.get('old.md'), 'new.md');
+  let renameId;
+  const renamed = p.serverMerge.requestRename('old.md', 'new.md', hash('same'), async id => { renameId = id; return true; });
+  assert.equal(await p.serverMerge.requestUploadFromDisk('old.md', true), 'dirty');
+  assert.equal(await p.serverMerge.requestUpload('new.md', 'same', hash('same'), false), 'dirty');
+  await p.serverMerge.onAck({ path: 'old.md', opId: sent[0].data.opId, rev: 51, sha: sha('same') });
+  await renamed;
+  await p.serverMerge.onAck({ path: 'new.md', opId: renameId, rev: 52, sha: sha('same') });
+  const uploads = sent.filter(({ data }) => data.path === 'new.md');
+  assert.equal(uploads.length, 1, 'force must follow the renamed path even when its body equals base');
+  assert.equal(uploads[0].data.content, 'same');
+});
+
+await test('forced upload bypasses the self-write marker and retry fallback retains force', async () => {
+  const { p, put, files, sent } = fixture(); put('same.md', 'same', 50);
+  await p.serverMerge.onPush({ path: 'same.md', content: 'remote', contentHash: hash('remote'), sha: sha('remote'), rev: 51 });
+  assert.equal(await p.serverMerge.requestUploadFromDisk('same.md', true), 'sent', 'explicit force overrides expected self marker');
+  await p.serverMerge.onAck({ path: 'same.md', opId: sent[0].data.opId, rev: 52, sha: sha('remote') });
+  p.serverMerge.env.setTimer = undefined;
+  const read = p.serverMerge.env.readLocal;
+  p.serverMerge.env.readLocal = async () => { throw Error('read failed'); };
+  assert.equal(await p.serverMerge.requestUploadFromDisk('same.md', true), 'failed');
+  p.serverMerge.env.readLocal = read;
+  files.get('same.md').content = 'next';
+  await p.serverMerge.requestUploadFromDisk('same.md');
+  await p.serverMerge.onAck({ path: 'same.md', opId: sent[1].data.opId, rev: 53, sha: sha('next') });
+  assert.equal(sent.length, 3, 'fallback dirty force must survive a later ordinary upload/ACK');
+});
+
+await test('both budget checks retain force across ordinary requests without repeatedly draining themselves', async () => {
+  for (const knownSize of [true, false]) {
+    const { p, put, sent } = fixture();
+    p.serverMerge.maxQueuedBytes = 10;
+    put('other.md', '12345678'); put('same.md', 'same', 50);
+    if (!knownSize) p.serverMerge.env.localSize = undefined;
+    await p.serverMerge.requestUploadFromDisk('other.md');
+    const drained = [], upload = p.serverMerge.requestUploadFromDisk.bind(p.serverMerge);
+    p.serverMerge.requestUploadFromDisk = (...args) => { const result = upload(...args); drained.push(result); return result; };
+    assert.equal(await p.serverMerge.requestUploadFromDisk('same.md', true), 'deferred');
+    await p.serverMerge.requestUploadFromDisk('same.md', false);
+    for (const result of drained) await result;
+    assert.equal(p.serverMerge.debugSizes().deferred, 1);
+    await p.serverMerge.onAck({ path: 'other.md', opId: sent[0].data.opId, rev: 51, sha: sha('12345678') });
+    for (const result of drained) await result;
+    assert.equal(sent.filter(({ data }) => data.path === 'same.md').length, 1, 'force survives ' + (knownSize ? 'pre-read' : 'post-read') + ' budget gate');
+    assert.equal(p.serverMerge.debugSizes().deferred, 0);
+  }
+});
+
+await test('a rename carries deferred force to the new path; deletion cancels the deferred upload', async () => {
+  for (const operation of ['rename', 'delete']) {
+    const { p, put, files, sent } = fixture();
+    p.serverMerge.maxQueuedBytes = 10;
+    put('other.md', '12345678'); put('old.md', 'same', 50);
+    await p.serverMerge.requestUploadFromDisk('other.md');
+    assert.equal(await p.serverMerge.requestUploadFromDisk('old.md', true), 'deferred');
+    let id;
+    if (operation === 'rename') {
+      await p.app.vault.rename(files.get('old.md'), 'new.md');
+      await p.serverMerge.requestRename('old.md', 'new.md', hash('same'), async opId => { id = opId; return true; });
+      await p.serverMerge.onAck({ path: 'new.md', opId: id, rev: 51, sha: sha('same') });
+    } else {
+      files.delete('old.md');
+      await p.serverMerge.requestDelete('old.md', async opId => { id = opId; return true; });
+      await p.serverMerge.onAck({ path: 'old.md', opId: id, rev: 51 });
+    }
+    const drained = [], upload = p.serverMerge.requestUploadFromDisk.bind(p.serverMerge);
+    p.serverMerge.requestUploadFromDisk = (...args) => { const result = upload(...args); drained.push(result); return result; };
+    await p.serverMerge.onAck({ path: 'other.md', opId: sent[0].data.opId, rev: 52, sha: sha('12345678') });
+    await Promise.all(drained);
+    assert.equal(sent.filter(({ data }) => data.path === 'new.md').length, operation === 'rename' ? 1 : 0);
+    assert.equal(sent.filter(({ data }) => data.path === 'old.md').length, 0);
+    assert.equal(p.serverMerge.debugSizes().deferred, 0);
+    assert.equal(p.serverMerge.debugSizes().dirty, 0);
+  }
+});
+
+await test('reset/dispose discard queued force without contaminating the next session', async () => {
+  for (const operation of ['reset', 'dispose']) {
+    const { p, put, sent } = fixture();
+    p.serverMerge.maxQueuedBytes = 10;
+    put('other.md', '12345678'); put('same.md', 'same', 50);
+    await p.serverMerge.requestUploadFromDisk('other.md');
+    await p.serverMerge.requestUploadFromDisk('other.md', true);
+    await p.serverMerge.requestUploadFromDisk('same.md', true);
+    p.serverMerge[operation]();
+    assert.equal(p.serverMerge.debugSizes().inflight, 0);
+    assert.equal(p.serverMerge.debugSizes().dirty, 0);
+    assert.equal(p.serverMerge.debugSizes().deferred, 0);
+    assert.equal(await p.serverMerge.requestUploadFromDisk('same.md'), 'unchanged');
+    assert.equal(sent.length, 1, 'old force must not leak into a new session');
+  }
+});
+
 assert.equal(failures.length, 0, failures.join(', '));

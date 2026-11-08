@@ -131,7 +131,7 @@ export const MAX_QUEUED_BYTES = 32 * 1024 * 1024;
 export class ServerMergeClient {
   readonly env: MergeEnv;
   private inflight = new Map<string, Inflight>();
-  private dirty = new Set<string>();
+  private dirty = new Map<string, boolean>();
   /** 自身写入的正文 sha256：对应 modify 事件到来时按内容比对抑制，而非时间窗 */
   private expected = new Map<string, string>();
   /** Ack 带 conflictCopy 后等待副本推送的看门狗：超时未到 → 主动拉取，避免静默分叉 */
@@ -145,7 +145,7 @@ export class ServerMergeClient {
   /** 每路径连续超时重发次数；Ack 通过清该路径，认证成功清全部（反复「打开即断」不会回到 30s） */
   private retries = new Map<string, number>();
   /** 因内存预算被延后的路径（只排路径，不排正文） */
-  private deferred = new Set<string>();
+  private deferred = new Map<string, boolean>();
   maxQueuedBytes = MAX_QUEUED_BYTES;
   /** 认证响应 features 含 serverMerge；读到前不发写请求（调用方判 supported） */
   supported = false;
@@ -261,10 +261,27 @@ export class ServerMergeClient {
 
   /** 在途释放后，补上一个因内存预算延后的路径 */
   private drainDeferred(): void {
-    const next = this.deferred.values().next();
+    const next = this.deferred.entries().next();
     if (next.done) return;
-    this.deferred.delete(next.value);
-    void this.requestUploadFromDisk(next.value);
+    const [path, force] = next.value;
+    this.deferred.delete(path);
+    void this.requestUploadFromDisk(path, force);
+  }
+
+  /** 合并排队请求时，普通事件不能撤销已有的强制补传。 */
+  private markDirty(path: string, force = false): void {
+    this.dirty.set(path, force || this.dirty.get(path) === true);
+  }
+
+  private defer(path: string, force: boolean): void {
+    this.deferred.set(path, force || this.deferred.get(path) === true);
+  }
+
+  private async flushDirty(path: string): Promise<void> {
+    if (!this.dirty.has(path)) return;
+    const force = this.dirty.get(path) === true;
+    this.dirty.delete(path);
+    await this.requestUploadFromDisk(path, force);
   }
 
   private wake(path: string): void {
@@ -314,7 +331,7 @@ export class ServerMergeClient {
   async requestUpload(path: string, content: string, hash: string, force = false): Promise<UploadResult> {
     if (this.env.canSend && !this.env.canSend()) return "blocked";
     if (this.inflight.has(path) || this.busy.has(path)) {
-      this.dirty.add(path);
+      this.markDirty(path, force);
       return "dirty";
     }
     const sha = await this.env.sha(content);
@@ -322,7 +339,7 @@ export class ServerMergeClient {
     if (pre) return pre;
     // await 之后重新检查单飞
     if (this.inflight.has(path) || this.busy.has(path)) {
-      this.dirty.add(path);
+      this.markDirty(path, force);
       return "dirty";
     }
     const entry: Inflight = { kind: "modify", opId: this.opIdFor(path, sha), since: this.env.now(), content, hash, sha };
@@ -335,7 +352,7 @@ export class ServerMergeClient {
     const exp = this.expected.get(path);
     if (exp !== undefined) {
       this.expected.delete(path);
-      if (exp === sha) return "self";
+      if (!force && exp === sha) return "self";
     }
     const base = this.env.getBase(path);
     if (!force && base.hash === hash && (base.sha === null || base.sha === sha)) return "unchanged";
@@ -375,12 +392,12 @@ export class ServerMergeClient {
   async requestUploadFromDisk(path: string, force = false): Promise<UploadResult> {
     if (this.env.canSend && !this.env.canSend()) return "blocked";
     if (this.inflight.has(path) || this.busy.has(path)) {
-      this.dirty.add(path);
+      this.markDirty(path, force);
       return "dirty";
     }
     const size = this.env.localSize?.(path);
     if (size != null && this.inflight.size > 0 && this.inflightBytes() + size > this.maxQueuedBytes) {
-      this.deferred.add(path);
+      this.defer(path, force);
       return "deferred";
     }
     const entry: Inflight = { kind: "modify", opId: this.env.newOpId(), since: this.env.now(), content: "", hash: "", sha: "" };
@@ -418,9 +435,9 @@ export class ServerMergeClient {
         return pre;
       }
       if (this.inflight.size > 1 && this.inflightBytes() + content.length > this.maxQueuedBytes) {
-        this.deferred.add(path);
         free();
         this.env.releaseSlot?.(path);
+        this.defer(path, force);
         return "deferred";
       }
       entry.content = content;
@@ -447,17 +464,13 @@ export class ServerMergeClient {
   /** 上传在取槽之后异常：短延时（5s 起指数退避，上限 5 分钟）重新走一遍 */
   private scheduleRetry(path: string, force: boolean): void {
     if (!this.env.setTimer) {
-      this.dirty.add(path);
+      this.markDirty(path, force);
       return;
     }
     const n = this.retries.get(path) ?? 0;
     this.retries.set(path, n + 1);
     const ms = Math.min(5000 * 2 ** n, RETRY_MAX_MS);
     this.env.setTimer(() => void this.requestUploadFromDisk(path, force), ms);
-  }
-
-  private async uploadFromDisk(path: string): Promise<void> {
-    await this.requestUploadFromDisk(path);
   }
 
   private markBusy(...paths: string[]): void {
@@ -506,13 +519,20 @@ export class ServerMergeClient {
   async requestRename(oldPath: string, newPath: string, hash: string, send: (opId: string, baseSha: string | null, isResend: boolean) => Promise<boolean>): Promise<boolean> {
     if (this.env.canSend && !this.env.canSend()) return false;
     this.markBusy(oldPath, newPath);
+    for (const path of [oldPath, newPath]) {
+      if (this.deferred.has(path)) this.markDirty(newPath, this.deferred.get(path));
+    }
     this.forget(oldPath);
     this.forget(newPath);
     let entry: Inflight;
     try {
       await this.waitIdle(oldPath);
       await this.waitIdle(newPath);
-      if (this.dirty.delete(oldPath)) this.dirty.add(newPath);
+      if (this.dirty.has(oldPath)) {
+        const force = this.dirty.get(oldPath);
+        this.dirty.delete(oldPath);
+        this.markDirty(newPath, force);
+      }
       const base = this.env.getBase(oldPath);
       entry = {
         kind: "rename", opId: this.env.newOpId(), since: this.env.now(), content: "",
@@ -557,7 +577,7 @@ export class ServerMergeClient {
       } finally {
         this.release(p);
       }
-      if (this.dirty.delete(p)) await this.uploadFromDisk(p);
+      await this.flushDirty(p);
       return result;
     });
   }
@@ -592,13 +612,13 @@ export class ServerMergeClient {
       }
       // 本地已继续编辑（或写入时被改）：base = 已发送正文（服务端有其快照），随后重传本地
       this.setBaseMax(p, e.hash, e.sha, rev, false);
-      if ((await this.env.readLocal(p)) !== null) this.dirty.add(p);
+      if ((await this.env.readLocal(p)) !== null) this.markDirty(p);
       return;
     }
     const same = local === e.content;
     this.setBaseMax(p, e.hash, a.sha || e.sha, rev, same);
     // 本地在 Ack 前又变了，但其 modify 事件可能还在防抖队列：自己补一次（幂等，hash==base 则不发）
-    if (!same && local !== null) this.dirty.add(p);
+    if (!same && local !== null) this.markDirty(p);
   }
 
   private async ackDelete(p: string, e: Inflight, a: AckInfo, rev: number): Promise<AckResult> {
@@ -622,7 +642,7 @@ export class ServerMergeClient {
       // base 回到删除前可信祖先（无祖先则无 base），rev 升到 Ack 的 rev，交服务端三方合并 / 冲突副本
       if (e.hash && e.sha) this.setBaseMax(p, e.hash, e.sha, rev, false);
       else this.env.clearBase(p, rev);
-      this.dirty.add(p);
+      this.markDirty(p);
     }
     return "rejected";
   }
@@ -632,7 +652,7 @@ export class ServerMergeClient {
     if (a.rejected) {
       // 目标已存在且不同 / 源不存在：本地文件保持不动，作为新建上传（无 base），由服务端处理冲突副本
       this.env.clearBase(p);
-      this.dirty.add(p);
+      this.markDirty(p);
       return "rejected";
     }
     this.env.clearBase(old, rev);
@@ -650,11 +670,11 @@ export class ServerMergeClient {
         if (await this.env.casWrite(p, local, a.content)) this.setBaseMax(p, hs, shaS, rev, true);
         else {
           this.expected.delete(p);
-          this.dirty.add(p);
+          this.markDirty(p);
         }
       } else {
         if (e.hash) this.setBaseMax(p, e.hash, e.sha, rev, false);
-        this.dirty.add(p);
+        this.markDirty(p);
       }
       return "ok";
     }
@@ -666,7 +686,7 @@ export class ServerMergeClient {
     }
     const equal = serverSha ? (await this.env.sha(local)) === serverSha : (await this.env.hash(local)) === e.hash;
     this.setBaseMax(p, e.hash, serverSha, rev, equal);
-    if (!equal) this.dirty.add(p);
+    if (!equal) this.markDirty(p);
     return "ok";
   }
 
@@ -675,7 +695,7 @@ export class ServerMergeClient {
     return this.chain(path, async () => {
       if (!this.inflight.has(path)) return;
       this.release(path);
-      if (this.dirty.delete(path)) await this.uploadFromDisk(path);
+      await this.flushDirty(path);
     });
   }
 
