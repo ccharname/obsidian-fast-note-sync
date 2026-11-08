@@ -333,6 +333,7 @@ export default {
   "ui.log.summary.no_changes": "No changes",
 
   // --- ui.log.action ---
+  "ui.log.action.ConnectionClosed": "Sync connection closed",
   "ui.log.action.VaultScanning_full": "Vault Hash Calculation Progress (Full)",
   "ui.log.action.VaultScanning_incremental": "Vault Hash Calculation Progress (Incremental)",
   "ui.log.action.VaultScanningSummary_full": "Sync Started (Full) - Hash Calculation",
