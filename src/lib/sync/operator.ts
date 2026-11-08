@@ -3,6 +3,7 @@ import { TFolder, TFile, normalizePath } from "obsidian";
 import { receiveFileUpload, receiveFileSyncUpdate, receiveFileSyncDelete, receiveFileSyncMtime, receiveFileSyncChunkDownload, receiveFileSyncEnd, checkAndUploadAttachments, receiveFileSyncRename, receiveFileRenameAck, receiveFileUploadAck, receiveFileDeleteAck, isPluginUnloading, sweepStalledDownloadSessions } from "./operator_file";
 import { hashContent, hashContentAsync, dump, isPathExcluded, isFolderSyncPathExcluded, configIsPathExcluded, getConfigSyncCustomDirs, generateUUID, showSyncNotice, isLargeBinarySyncRisk, describeBinarySyncLimit, hashFileAsync, formatFileSize, yieldToMain, getPluginDir } from "../utils/helpers";
 import { receiveConfigSyncModify, receiveConfigUpload, receiveConfigSyncMtime, receiveConfigSyncDelete, receiveConfigSyncEnd, configAllPaths, receiveConfigSyncClear, receiveConfigModifyAck, receiveConfigDeleteAck } from "./operator_config";
+import { conflictFilePaths } from "./note_core_deps";
 import { receiveNoteSyncModify, receiveNoteUpload, receiveNoteSyncMtime, receiveNoteSyncDelete, receiveNoteSyncEnd, receiveNoteSyncRename, receiveNoteModifyAck, receiveNoteRenameAck, receiveNoteDeleteAck } from "./operator_note";
 import { SyncMode, SnapFile, SnapFolder, SyncEndData, PathHashFile, NoteSyncData, FileSyncData, ConfigSyncData, FolderSyncData } from "../utils/types";
 import { receiveFolderSyncModify, receiveFolderSyncDelete, receiveFolderSyncRename, receiveFolderSyncEnd } from "./operator_folder";
@@ -521,9 +522,18 @@ async function receiveSyncEndWrapper(data: unknown, plugin: FastSync, type: "not
     plugin.fileHashManager.removeFileHashes(plugin.pendingDeleteNotePaths)
     plugin.pendingDeleteNotePaths.clear()
     // 同步结束，提交本轮同步中可能产生的待确认上传 hash
-    plugin.fileHashManager.setFileHashes(plugin.pendingNoteModifies, (path) => plugin.app.vault.getFileByPath(path)?.stat)
-    plugin.pendingNoteModifies.clear()
-    plugin.localStorageManager.clearPending('pendingNoteModifies')
+    // clientAutoMerge：仍在单飞登记里的在途上传不能被 SyncEnd 当作已提交清掉（它们只能由 Ack/530 结算）
+    const inFlight = plugin.settings.conflictMode === "clientAutoMerge" && plugin.noteCore ? plugin.noteCore.tracker : null
+    plugin.fileHashManager.setFileHashes(
+      inFlight ? [...plugin.pendingNoteModifies].filter(([p]) => !inFlight.has(p)) : plugin.pendingNoteModifies,
+      (path) => plugin.app.vault.getFileByPath(path)?.stat)
+    if (inFlight) {
+      for (const p of [...plugin.pendingNoteModifies.keys()]) if (!inFlight.has(p)) plugin.pendingNoteModifies.delete(p)
+      plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
+    } else {
+      plugin.pendingNoteModifies.clear()
+      plugin.localStorageManager.clearPending('pendingNoteModifies')
+    }
     // 同步结束，提交扫描阶段计算出的哈希 (Commit hashes calculated during scan)
     commitScannedHashes(plugin.scannedNoteHashes, (m) => plugin.fileHashManager.bulkSetFromScanned(m));
     // 同步结束，强制落盘本轮防抖累积的哈希写入
@@ -632,8 +642,17 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
     if (await adapter.exists(conflictDir)) {
       const files = await adapter.list(conflictDir);
       const deletePromises: Promise<void>[] = [];
+      // 仍在 conflictedPaths 里的路径，其 base/remote/meta 是解决冲突的证据，不能清掉
+      const keep = new Set<string>();
+      for (const cp of plugin.syncState.conflictedPaths) {
+        const cf = conflictFilePaths(plugin, cp);
+        keep.add(cf.base);
+        keep.add(cf.remote);
+        keep.add(cf.meta);
+      }
       if (files && files.files) {
         for (const f of files.files) {
+          if (keep.has(f)) continue;
           deletePromises.push(adapter.remove(f));
         }
       }

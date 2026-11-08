@@ -170,6 +170,8 @@ export class SyncState {
    * Pending note upload hash map, update hashManager only after server NoteModifyAck
    */
   pendingNoteModifies = new Map<string, string>();
+  /** 冲突解决弹窗已发出上传、等待 Ack 后才清除冲突状态的路径 */
+  pendingResolveAcks = new Set<string>();
   /** 待服务端 NoteDeleteAck 确认的路径集合 / Paths pending NoteDeleteAck */
   pendingNoteDeleteAcks = new Set<string>();
   /** 待服务端 FileDeleteAck 确认的路径集合 / Paths pending FileDeleteAck */

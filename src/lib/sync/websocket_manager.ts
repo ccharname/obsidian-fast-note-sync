@@ -10,6 +10,8 @@ import { WebSocketClient } from "./websocket_client";
 import { CLIENT_TYPE } from "../utils/types";
 import type FastSync from "../../main";
 import { $ } from "../../i18n/lang";
+import { isAutoMerge } from "./note_core_deps";
+import { classifyContext } from "./context_filter";
 
 
 // 冲突相关错误码
@@ -178,6 +180,8 @@ export class WebSocketManager {
         }
         clearUploadQueue();
         this.plugin.concurrencyLimiter.clear();
+        // 断线：在途笔记上传全部作废（服务端是否收到未知，重连后的同步轮次会重新对账）
+        this.plugin.noteCore?.onDisconnect();
         // 断线：清空所有在途上行批发送窗口会话的重传 timer（设计稿 §3.2 异常路径表）；
         // W==0/旧路径下没有会话注册，no-op
         settleAllBatchSendSessionsOnClose();
@@ -414,6 +418,7 @@ export class WebSocketManager {
         return;
       }
 
+      let realtimeAdmitted = false;
       // 基于 Context 进行过滤：如果处于活跃的同步中，必须完全匹配
       // Filter based on Context: if there's an active sync context, incoming messages (including Acks) must match
       if (this.plugin.syncState.activeSyncContext) {
@@ -423,9 +428,15 @@ export class WebSocketManager {
         const isPendingMtimeAck = msgAction === WSAction.NoteSyncMtime && !data.context
           && typeof data.data?.path === 'string'
           && this.plugin.pendingNoteModifies.has(data.data.path);
-        if (!isControlMsg && !isPendingMtimeAck && data.context !== this.plugin.syncState.activeSyncContext) {
-          dump(`[SyncContext] Discard message ${msgAction} due to mismatched context. Expected: ${this.plugin.syncState.activeSyncContext}, Got: ${data.context}`);
-          return;
+        // clientAutoMerge：无 context 的 NoteModifyAck 与实时 NoteSync* 推送不能丢（见 context_filter.ts），
+        // 放行后打 realtime 标记，处理完不计入轮次进度。携带「别的」context 的仍丢弃。
+        if (!isControlMsg && !isPendingMtimeAck) {
+          const verdict = classifyContext({ action: msgAction, msgContext: data.context, activeContext: this.plugin.syncState.activeSyncContext, autoMerge: isAutoMerge(this.plugin) });
+          if (verdict === "discard") {
+            dump(`[SyncContext] Discard message ${msgAction} due to mismatched context. Expected: ${this.plugin.syncState.activeSyncContext}, Got: ${data.context}`);
+            return;
+          }
+          if (verdict === "realtime") realtimeAdmitted = true;
         }
       }
 
@@ -446,6 +457,7 @@ export class WebSocketManager {
           const merged = { ...data.data };
           if (data.context) merged.context = data.context;
           if (pageIndex !== undefined) merged.pageIndex = pageIndex;
+          if (realtimeAdmitted) merged.realtime = true;
           payload = merged;
         }
         void handler(payload, this.plugin);
@@ -479,7 +491,8 @@ export class WebSocketManager {
       isMacOS: Platform.isMacOS,
       isWin: Platform.isWin,
       isLinux: Platform.isLinux,
-      offlineSyncStrategy: this.plugin.settings.offlineSyncStrategy,
+      // clientAutoMerge：固定声明 manualMerge，只借用服务端的 baseHash CAS，合并全部在客户端完成（设置里的策略值不改写）
+      offlineSyncStrategy: this.plugin.settings.conflictMode === "clientAutoMerge" ? "manualMerge" : this.plugin.settings.offlineSyncStrategy,
       protobuf: isProtobufEnabled,
     });
   }
@@ -595,6 +608,23 @@ export class WebSocketManager {
          "serverContent length:", serverContent ? serverContent.length : "undefined/null",
          "serverHash:", serverHash, 
          "strategy:", this.plugin.settings.offlineSyncStrategy);
+
+    // clientAutoMerge：由 NoteMergeCore 做三方合并（先验 serverHash，不信任服务端 baseContent）
+    if (isAutoMerge(this.plugin) && path !== "") {
+      const rawContent = payloadData && typeof payloadData === "object" ? (payloadData.serverContent ?? payloadData.ServerContent) : undefined;
+      try {
+        await this.plugin.noteCore.onConflict({
+          path,
+          serverContent: typeof rawContent === "string" ? rawContent : undefined,
+          serverHash: serverHash || undefined,
+          baseContent,
+        });
+      } catch (e) {
+        dump("[ConflictDebug] auto-merge on 530 failed:", e);
+        showSyncNotice($("ui.status.conflict", { path: path }), 10000);
+      }
+      return;
+    }
 
     if (this.plugin.settings.offlineSyncStrategy === "manualMerge" &&
         path !== "" && serverContent !== "" && serverHash !== "") {

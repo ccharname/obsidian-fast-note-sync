@@ -1,7 +1,8 @@
 import { App, Modal, setIcon, TFile, Platform, Notice } from "obsidian";
 import type FastSync from "../main";
 import { $ } from "../i18n/lang";
-import { hashContent, hashContentAsync, getPluginDir } from "../lib/utils/helpers";
+import { hashContent, hashContentAsync } from "../lib/utils/helpers";
+import { isAutoMerge } from "../lib/sync/note_core_deps";
 
 /**
  * ConflictResolveModal provides a 3-column diff view for manual note conflict resolution.
@@ -341,66 +342,50 @@ export class ConflictResolveModal extends Modal {
         // Use raw textarea content directly — no diff markup to clean // 直接使用编辑器纯文本，无需清洗差异标记
         const finalContent = this.editorEl.value;
 
-        // 1. Overwrite local file // 覆写本地文件
-        await this.app.vault.modify(this.file, finalContent);
+        // 先确认没有在途上传（单飞），否则合并稿与在途请求的 Ack 无法对应
+        const auto = isAutoMerge(this.plugin);
+        if (auto && this.plugin.noteCore.tracker.has(this.file.path)) {
+          new Notice($("ui.conflict.upload_busy") || "该笔记有上传正在进行，请稍后再试");
+          throw new Error("upload in flight");
+        }
+
+        // 1. Overwrite local file // 覆写本地文件（忽略该次写入产生的 modify 事件，上传由下面显式发起）
+        this.plugin.addIgnoredFile(this.file.path);
+        try {
+          await this.app.vault.modify(this.file, finalContent);
+        } finally {
+          window.setTimeout(() => this.plugin.removeIgnoredFile(this.file.path), 600);
+        }
 
         // 2. Repush NoteModify marked as resolved // 向服务器发起携带 resolved 标志的推送
         const contentHash = await hashContentAsync(finalContent);
-        const data = {
-          vault: this.plugin.settings.vault,
-          path: this.file.path,
-          pathHash: hashContent(this.file.path),
-          baseHash: this.serverHash,
-          content: finalContent,
-          contentHash: contentHash,
-          ctime: this.file.stat.ctime,
-          mtime: this.file.stat.mtime,
-          isConflictResolved: true,
-        };
-
-        // Remove path from suppressed collection // 解除路径抑制
-        this.plugin.syncState.conflictedPaths.delete(this.file.path);
-        this.plugin.localStorageManager.setConflictedPaths(this.plugin.syncState.conflictedPaths);
-        this.plugin.statusBarManager.updateConflictBadge();
-
-        // 清理本地 conflict-notes 中的备份文件 (位于插件目录下，文件名附加路径哈希以防碰撞)
-        try {
-          const adapter = this.app.vault.adapter;
-          const safeName = this.file.path.replace(/\.md$/, "").replace(/[/\\]/g, "_");
-          const pathHash = hashContent(this.file.path);
-          const conflictDir = `${getPluginDir(this.plugin)}/conflict-notes`;
-          const baseBackupPath = `${conflictDir}/${safeName}_${pathHash}.base.md`;
-          const remoteBackupPath = `${conflictDir}/${safeName}_${pathHash}.remote.md`;
-
-          const deletePromises: Promise<void>[] = [];
-          if (await adapter.exists(baseBackupPath)) {
-            deletePromises.push(adapter.remove(baseBackupPath));
+        const baseHash = this.serverHash || this.plugin.fileHashManager.getPathHash(this.file.path) || "";
+        // 收到 Ack 才算解决：此处不清 conflictedPaths / conflict-notes（见 receiveNoteModifyAck），发送失败冲突标记仍在
+        this.plugin.syncState.pendingResolveAcks.add(this.file.path);
+        if (auto) {
+          if (!await this.plugin.noteCore.uploadResolved(this.file.path, baseHash)) {
+            this.plugin.syncState.pendingResolveAcks.delete(this.file.path);
+            throw new Error("resolved upload not sent");
           }
-          if (await adapter.exists(remoteBackupPath)) {
-            deletePromises.push(adapter.remove(remoteBackupPath));
+        } else {
+          const data = {
+            vault: this.plugin.settings.vault,
+            path: this.file.path,
+            pathHash: hashContent(this.file.path),
+            baseHash: baseHash,
+            content: finalContent,
+            contentHash: contentHash,
+            ctime: this.file.stat.ctime,
+            mtime: this.file.stat.mtime,
+            isConflictResolved: true,
+          };
+          if (!await this.plugin.concurrencyLimiter.waitForSlot(this.file.path)) {
+            this.plugin.syncState.pendingResolveAcks.delete(this.file.path);
+            this.close();
+            return;
           }
-          await Promise.all(deletePromises);
-
-          // 如果 conflict-notes 文件夹已空，则尝试一并清理（若被 Windows 锁定 busy 则静默忽略）
-          if (await adapter.exists(conflictDir)) {
-            const files = await adapter.list(conflictDir);
-            if (files && files.files.length === 0 && files.folders.length === 0) {
-              try {
-                await adapter.rmdir(conflictDir, true);
-              } catch {
-                // Ignore EBUSY/locked folder error, keeping empty folder is harmless // 忽略文件夹繁忙/锁定错误，保留空文件夹无害
-              }
-            }
-          }
-        } catch (e) {
-          console.error("Failed to clean up conflict-notes files on resolve:", e);
+          void this.plugin.websocket.SendMessage("NoteModify", data);
         }
-
-        if (!await this.plugin.concurrencyLimiter.waitForSlot(this.file.path)) {
-          this.close();
-          return;
-        }
-        void this.plugin.websocket.SendMessage("NoteModify", data);
 
         this.close();
       } catch (err) {

@@ -31,6 +31,7 @@ function load(name) {
     require(id) {
       if (id === "obsidian") return { TFile, TFolder, normalizePath, Platform: { isMobile: false } };
       if (id === "./remote_path_guard") return load("remote_path_guard");
+      if (id === "./note_core_deps") return { isAutoMerge: () => false, forgetNote: async () => {}, clearConflictState: async () => {}, conflictFilePaths: () => ({}) };
       if (id === "./sync_log_manager") return { SyncLogManager: logger };
       if (id === "../utils/helpers") return helpers;
       if (id === "../storage/file_cloud_preview") return { FileCloudPreview: { isRestrictedType: () => false } };
@@ -72,14 +73,14 @@ async function check(kind, operation, mode, alias = "notes/A\u00a0B.md") {
     settings: { syncEnabled: true, cloudPreviewEnabled: false },
     app: { vault: {
       adapter, getFileByPath: p => files.get(p), getAbstractFileByPath: p => files.get(p),
-      trash: async f => deleted.push(f.path),
+      trash: async f => deleted.push(f.path), read: async () => "",
       rename: async (f, p) => { renamed.push(p); files.delete(f.path); f.path = p; files.set(p, f); },
     } },
     lockManager: { withLock: async (_, callback) => callback() },
     addIgnoredFile: p => ignored.push(p), removeIgnoredFile() {},
     lastSyncPathDeleted: new Set(), lastSyncPathRenamed: new Set(), lastSyncMtime: new Map(),
     pendingNoteModifies: pending, fileDownloadSessions: new Map(),
-    fileHashManager: { removeFileHash: p => removedHashes.push(p), setFileHash() {} },
+    fileHashManager: { removeFileHash: p => removedHashes.push(p), setFileHash() {}, getPathHash: () => undefined },
     folderSnapshotManager: { removeFolder() {}, setFolderMtime() {} },
     localStorageManager: { getMetadata: () => 0, setMetadata() {}, savePending() {} },
     noteSyncTasks: { failed: 0 }, fileSyncTasks: { failed: 0 }, folderSyncTasks: { failed: 0 },

@@ -34,6 +34,8 @@ export interface PluginSettings {
   startupDelay: number
   /** 离线同步策略（如 newTimeMerge, ignoreTimeMerge 等） */
   offlineSyncStrategy: string
+  /** 冲突处理模式：clientAutoMerge=客户端自动三方合并（握手固定 manualMerge，仅借用服务端 CAS）；off=上游原行为 */
+  conflictMode: "clientAutoMerge" | "off"
   /** 笔记/文件同步排除文件夹（每行一个） */
   syncExcludeFolders: string
   /** 笔记/文件同步排除扩展名（如 .tmp, .log） */
@@ -138,6 +140,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   vault: "",
   startupDelay: 500,
   offlineSyncStrategy: "",
+  conflictMode: "clientAutoMerge",
   syncExcludeFolders: "",
   syncExcludeExtensions: "",
   syncExcludeWhitelist: "",
@@ -1821,6 +1824,22 @@ export class SettingTab extends PluginSettingTab {
         }),
     )
     this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.sync.sync_delay_desc"))
+
+    new Setting(set)
+      .setName($("setting.sync.conflict_mode"))
+      .setClass("fns-setting-item-vertical")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("clientAutoMerge", $("setting.sync.conflict_mode_auto"))
+          .addOption("off", $("setting.sync.conflict_mode_off"))
+          .setValue(this.plugin.settings.conflictMode || "clientAutoMerge")
+          .onChange(async (value) => {
+            this.plugin.settings.conflictMode = value as "clientAutoMerge" | "off"
+            await this.plugin.saveAndReloadServices("conflictMode")
+            this.plugin.websocket.sendClientInfo()
+          }),
+      )
+    this.setDescWithBreaks(set.lastElementChild as HTMLElement, $("setting.sync.conflict_mode_desc"))
 
     new Setting(set)
       .setName($("setting.sync.merge_strategy"))

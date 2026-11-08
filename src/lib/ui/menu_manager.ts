@@ -1,3 +1,4 @@
+import { readConflictMeta } from "../sync/note_core_deps";
 import { Menu, MenuItem, setIcon, Platform, WorkspaceLeaf, normalizePath, Notice } from 'obsidian';
 
 import { startupSync, startupFullSync, resetSettingSyncTime, rebuildAllHashes, clearAllHashes, cancelSync } from '../sync/operator';
@@ -797,13 +798,15 @@ export class MenuManager {
         action?: string;
         message?: string;
       }
+      const meta = await readConflictMeta(this.plugin, normalizedPath);
       const logs = SyncLogManager.getInstance().getLogs();
       const targetLog = (logs as SyncLogItem[]).find((l) => l.path && normalizePath(l.path) === normalizedPath && l.action === "NoteManualMergeConflict");
-      let serverHash = "";
+      // serverHash 优先读落盘的冲突元数据（不依赖内存日志，重启后仍在）
+      let serverHash = meta?.serverHash ?? "";
       if (targetLog && targetLog.message) {
         try {
           const conflictData = JSON.parse(targetLog.message) as Record<string, unknown>;
-          serverHash = typeof conflictData.serverHash === "string" ? conflictData.serverHash : "";
+          if (!serverHash) serverHash = typeof conflictData.serverHash === "string" ? conflictData.serverHash : "";
           if (!serverContent && typeof conflictData.serverContent === "string") {
             serverContent = conflictData.serverContent;
           }

@@ -9,7 +9,8 @@ class TFolder { constructor(path) { this.path = path; this.children = []; } }
 const helpers = { dump: noop, dumpError: noop, isPathExcluded: () => false,
   isFolderSyncPathExcluded: () => false, configIsPathExcluded: () => false,
   isPathInConfigSyncDirs: () => true, waitForFolderEmpty: async () => true,
-  checkAndNotifyCaseConflict: () => false, isLargeBinarySyncRisk: () => false };
+  checkAndNotifyCaseConflict: () => false, isLargeBinarySyncRisk: () => false,
+  hashContentAsync: async s => s };
 let guardModule; // #291 路径别名 guard 用真实实现 / real #291 alias guard
 let permanentCalls = 0;
 const forbidden = () => { permanentCalls++; throw new Error('permanent deletion must not be used'); };
@@ -21,6 +22,7 @@ function load(file) {
   vm.runInNewContext(code, { module, exports: module.exports, console,
     window: { setTimeout: fn => { fn(); return 1; } },
     require: id => id === 'obsidian' ? { TFile, TFolder, normalizePath: x => x.replace(/\\/g, '/') }
+      : id.includes('note_core_deps') ? { isAutoMerge: () => false, forgetNote: async () => {}, clearConflictState: async () => {}, conflictFilePaths: () => ({}) }
       : id.includes('helpers_obsidian_bypass') ? { ...helpers, vaultDelete: forbidden }
       : id.includes('helpers') ? { ...helpers, vaultDelete: forbidden }
       : id.includes('remote_path_guard') ? (guardModule ??= load('src/lib/sync/remote_path_guard.ts'))
@@ -43,12 +45,12 @@ function fixture(kind, fail = false) {
   const p = {
     settings: { syncEnabled: true, configSyncEnabled: true },
     app: { vault: { getFileByPath: () => item, getAbstractFileByPath: () => item,
-      trash, delete: forbidden,
+      trash, delete: forbidden, read: async () => 'x',
       adapter: { exists: async () => true, trashLocal: path => trash(path, false), remove: forbidden } } },
     lockManager: { withLock: async (_, fn) => fn() },
     addIgnoredFile: noop, removeIgnoredFile: noop, ignoredConfigFiles: new Set(),
     lastSyncPathDeleted: new Set(), lastSyncMtime: new Map(), pendingNoteModifies: new Map(),
-    fileHashManager: { removeFileHash: path => removedHashes.push(path) },
+    fileHashManager: { removeFileHash: path => removedHashes.push(path), getPathHash: () => 'x' },
     configHashManager: { isReady: () => true, removeFileHash: path => removedHashes.push(path) },
     configManager: { removeFileState: noop }, folderSnapshotManager: { removeFolder: noop },
     localStorageManager: { savePending: noop, getMetadata: () => 0, setMetadata: noop },

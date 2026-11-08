@@ -17,6 +17,7 @@ function load(file, extra = {}, globals = {}) {
     window: { setTimeout: fn => { fn(); return 1; }, clearTimeout: noop },
     ...globals,
     require: id => id === 'obsidian' ? { normalizePath: x => x, TFile: class {}, Platform: { isMobile: false } }
+      : id.includes('note_core_deps') ? { isAutoMerge: () => false, forgetNote: async () => {}, clearConflictState: async () => {}, conflictFilePaths: () => ({}) }
       : id.includes('helpers') ? helpers
       : id.includes('sync_log_manager') ? { SyncLogManager: { getInstance: () => logs } }
       : extra[id] || {} });
@@ -119,6 +120,7 @@ function fixture(content = 'same', base = 'same', pending = true) {
   const actions = new Proxy({}, { get: (_, key) => key });
   const { WebSocketManager } = load('src/lib/sync/websocket_manager.ts', {
     './websocket_action': actions,
+    './context_filter': { classifyContext: o => (!o.activeContext || o.msgContext === o.activeContext ? 'process' : 'discard') },
     './operator': { receiveOperators: new Map([['NoteSyncMtime', x => received.push(x)]]) }
   });
   const manager = Object.create(WebSocketManager.prototype);

@@ -18,6 +18,7 @@ function load(file, extra = {}, globals = {}) {
     window: { setTimeout: fn => { fn(); return 1; }, clearTimeout: noop },
     ...globals,
     require: id => id === 'obsidian' ? { normalizePath: x => x, TFile: MockFile, Platform: { isMobile: false } }
+      : id.includes('note_core_deps') ? { isAutoMerge: () => false, forgetNote: async () => {}, clearConflictState: async () => {}, conflictFilePaths: () => ({}) }
       : id.includes('helpers') ? helpers
       : id.includes('sync_log_manager') ? { SyncLogManager: { getInstance: () => logs } }
       : extra[id] || {} });
