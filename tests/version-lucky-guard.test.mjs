@@ -4,7 +4,7 @@ import path from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
 
-// -lucky 自维护构建：不提示上游新版本，也不允许一键升级覆盖插件文件
+// luckyBuild 自维护构建：不提示上游新版本，也不允许一键升级覆盖插件文件
 // Self-maintained -lucky builds never offer or perform the upstream one-click plugin upgrade.
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -39,10 +39,10 @@ vm.runInNewContext(code, {
 });
 const { VersionManager } = module.exports;
 
-const mk = (version, latest) => {
+const mk = (version, latest, lucky = false) => {
   const meta = { pluginVersionNewName: latest };
   return new VersionManager({
-    manifest: { id: "fast-note-sync", version },
+    manifest: { id: "fast-note-sync", version, ...(lucky ? { luckyBuild: true } : {}) },
     settings: { updateSource: "github" },
     localStorageManager: { getMetadata: (k) => meta[k], setMetadata: (k, v) => { meta[k] = v; } },
     app: { vault: { adapter: { writeBinary: async () => { writes++; } } } },
@@ -50,11 +50,11 @@ const mk = (version, latest) => {
 };
 
 // 自维护构建：上游更新的版本号也不提示
-const lucky = mk("2.4.0-lucky.1", "2.5.0");
+const lucky = mk("2.99.1", "3.0.0", true);
 assert.equal(lucky.isLuckyBuild(), true);
-assert.equal(lucky.isPluginNew(), false, "no upgrade badge for -lucky builds");
+assert.equal(lucky.isPluginNew(), false, "no upgrade badge for luckyBuild");
 assert.equal(lucky.hasNewVersion(), false);
-await assert.rejects(() => lucky.upgradePlugin(() => {}), /-lucky/);
+await assert.rejects(() => lucky.upgradePlugin(() => {}), /luckyBuild/);
 assert.equal(networkCalls, 0, "upgrade refused before any download");
 assert.equal(writes, 0);
 
