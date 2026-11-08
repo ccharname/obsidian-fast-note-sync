@@ -3,11 +3,12 @@
  */
 import { TFile, normalizePath, Platform } from "obsidian"
 import type FastSync from "../../main"
-import { hashContent, getPluginDir, getSafeCtime, dump, dumpError } from "../utils/helpers"
+import { hashContent, getPluginDir, getSafeCtime, dump, dumpError, configAddPathExcluded } from "../utils/helpers"
 import { SyncLogManager } from "./sync_log_manager"
 import { BaseStore } from "../storage/base_store"
 import { IgnoreRefs, conflictStem } from "./conflict_paths"
-import { NoteMergeCore, type CoreDeps, type ConflictInfo } from "./note_merge_core"
+import { ServerMergeCore, type CoreDeps, type ConflictInfo } from "./server_merge_core"
+import { MergeJournal } from "../storage/merge_journal"
 import { $ } from "../../i18n/lang"
 
 export const isAutoMerge = (plugin: FastSync): boolean => plugin.settings.conflictMode === "clientAutoMerge" && !!plugin.noteCore
@@ -50,28 +51,39 @@ export async function clearConflictState(plugin: FastSync, path: string): Promis
 }
 
 /** 笔记被删除/重命名：丢弃运行态、迁移或删除 base、清冲突状态 */
-export async function forgetNote(plugin: FastSync, path: string, renameTo?: string): Promise<void> {
+export async function forgetNote(plugin: FastSync, path: string, renameTo?: string, localMutation = false): Promise<void> {
   const np = normalizePath(path)
-  plugin.noteCore?.forget(np)
+  if (localMutation) await plugin.noteCore?.beginMutation(np, renameTo ? normalizePath(renameTo) : undefined)
+  else await plugin.noteCore?.forget(np, renameTo ? normalizePath(renameTo) : undefined)
   try {
     if (renameTo) await plugin.baseStore?.rename(np, normalizePath(renameTo))
     else await plugin.baseStore?.delete(np)
   } catch (e) {
     dump("[FastSync] forgetNote: base update failed", e)
   }
-  if (plugin.syncState?.conflictedPaths?.has(np)) await clearConflictState(plugin, np)
+  if (renameTo && plugin.syncState?.conflictedPaths?.has(np)) {
+    const to = normalizePath(renameTo), old = conflictFilePaths(plugin, np), next = conflictFilePaths(plugin, to)
+    for (const k of ["base", "remote", "meta"] as const) if (await plugin.app.vault.adapter.exists(old[k])) await plugin.app.vault.adapter.rename(old[k], next[k])
+    plugin.syncState.conflictedPaths.delete(np)
+    plugin.syncState.conflictedPaths.add(to)
+    plugin.localStorageManager.setConflictedPaths(plugin.syncState.conflictedPaths)
+  } else if (!renameTo && plugin.syncState?.conflictedPaths?.has(np)) {
+    // Keep conflict backups when a remote deletion races an unresolved draft.
+    plugin.statusBarManager?.updateConflictBadge()
+  }
 }
 
 // ---------------------------------------------------------------- 适配
 
 const CAS_ABORT = new Error("cas-abort")
 const LOST_DIR = "lost-notes"
-const LOST_KEEP = 50
 
-export function createNoteCore(plugin: FastSync): NoteMergeCore {
+export function createNoteCore(plugin: FastSync): ServerMergeCore {
   const vault = plugin.app.vault
   const pluginDir = () => getPluginDir(plugin)
 
+  for (const relative of ["merge-journal.json", "merge-journal.json.tmp", "merge-journal.json.0", "merge-journal.json.1", "merge-journal/", "base/", "conflict-notes/", "lost-notes/"]) configAddPathExcluded(`${pluginDir()}/${relative}`, plugin)
+  const journal = new MergeJournal({ adapter: vault.adapter, dir: `${pluginDir()}/merge-journal`, legacyPath: `${pluginDir()}/merge-journal.json` })
   const ignoreRefs = new IgnoreRefs()
   const unignoreLater = (path: string, written: string | null) => {
     window.setTimeout(() => {
@@ -92,6 +104,9 @@ export function createNoteCore(plugin: FastSync): NoteMergeCore {
     hash: hashContent,
     now: () => Date.now(),
     baseStore: plugin.baseStore,
+    requestId: () => crypto.randomUUID(),
+    loadJournal: () => journal.load(),
+    saveJournal: (path, state) => journal.save(path, state),
     async locked(path, fn) {
       for (let i = 0; i < 8; i++) {
         let ran = false
@@ -185,6 +200,14 @@ export function createNoteCore(plugin: FastSync): NoteMergeCore {
     clearConflict: async (path) => {
       if (plugin.syncState.conflictedPaths.has(normalizePath(path))) await clearConflictState(plugin, path)
     },
+    async sendMutation(path, intent) {
+      const slot = intent.renameTo ?? path
+      if (!await plugin.concurrencyLimiter.waitForSlot(slot)) return false
+      if (!intent.isCurrent()) { plugin.concurrencyLimiter.releaseSlot(slot); return false }
+      const data = { vault: plugin.settings.vault, mergeProtocol: 1, requestId: intent.requestId, baseRevision: intent.baseRevision, path: intent.renameTo ?? path, pathHash: hashContent(intent.renameTo ?? path), ...(intent.renameTo ? { oldPath: path, oldPathHash: hashContent(path) } : {}) }
+      void plugin.websocket.SendMessage(intent.kind === "rename" ? "NoteRename" : "NoteDelete", data)
+      return true
+    },
     async sendUpload(path, e) {
       const f = vault.getFileByPath(normalizePath(path))
       if (!f) return false
@@ -195,6 +218,12 @@ export function createNoteCore(plugin: FastSync): NoteMergeCore {
         path: f.path,
         pathHash: hashContent(f.path),
         content: e.content,
+        mergeProtocol: 1,
+        requestId: e.requestId,
+        ...(typeof e.baseRevision === "string" ? { baseRevision: e.baseRevision } : {}),
+        ...(e.recreate !== undefined ? { recreate: e.recreate } : {}),
+        hasBase: e.baseContent !== null,
+        baseContent: e.baseContent ?? "",
         contentHash: e.contentHash,
         ...(e.baseHash !== null ? { baseHash: e.baseHash } : { baseHashMissing: true }),
         ...(e.kind === "resolved" ? { isConflictResolved: true } : {}),
@@ -228,11 +257,10 @@ export function createNoteCore(plugin: FastSync): NoteMergeCore {
         if (!(await a.exists(dir))) await a.mkdir(dir)
         const stem = conflictStem(normalizePath(path), hashContent)
         await a.write(`${dir}/${stem}.${Date.now()}.${why}.md`, content)
-        const files = (await a.list(dir)).files.sort()
-        for (const old of files.slice(0, Math.max(0, files.length - LOST_KEEP))) await a.remove(old)
         SyncLogManager.getInstance().addLog("info", "NoteLostCopy", `已保存本地副本（服务端并发写入覆盖风险）: ${path}`, "success", path)
       } catch (e) {
         dumpError("[FastSync] saveLost failed", e)
+        throw e
       }
     },
     log(action, message, status, path) {
@@ -240,7 +268,7 @@ export function createNoteCore(plugin: FastSync): NoteMergeCore {
     },
     schedule: (fn, ms) => void window.setTimeout(fn, ms),
   }
-  return new NoteMergeCore(deps)
+  return new ServerMergeCore(deps)
 }
 
 export function createBaseStore(plugin: FastSync): BaseStore {

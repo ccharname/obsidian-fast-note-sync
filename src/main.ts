@@ -14,8 +14,8 @@ import { RecycleBinModal } from "./views/recycle-bin-modal";
 import { FileCloudPreview } from "./lib/storage/file_cloud_preview";
 import { FileHashManager } from "./lib/storage/file_hash_manager";
 import { BaseStore } from "./lib/storage/base_store";
-import { NoteMergeCore } from "./lib/sync/note_merge_core";
-import { createBaseStore, createNoteCore, seedBases } from "./lib/sync/note_core_deps";
+import { ServerMergeCore as NoteMergeCore } from "./lib/sync/server_merge_core";
+import { createBaseStore, createNoteCore } from "./lib/sync/note_core_deps";
 import { DebugLogManager } from "./lib/utils/debug_log_manager";
 import { SyncLogManager } from "./lib/sync/sync_log_manager";
 import { DebugLogModal } from "./views/debug-log-modal";
@@ -65,7 +65,7 @@ export default class FastSync extends Plugin {
   shareIndicatorManager: ShareIndicatorManager    // 分享指示器管理器 / Share indicator manager
   fileHashManager: FileHashManager                // 文件哈希管理器
   baseStore: BaseStore                            // 三方合并 base 存储
-  noteCore: NoteMergeCore                         // 笔记客户端自动三方合并核心
+  noteCore: NoteMergeCore                         // 服务端合并协议的本地祖先与请求状态
   private noteSweepTimer: number | null = null
   configHashManager: ConfigHashManager            // 配置哈希管理器
   localStorageManager: LocalStorageManager        // 本地存储管理器
@@ -557,16 +557,13 @@ export default class FastSync extends Plugin {
       }
       await Promise.all(initPromises)
 
-      // 笔记客户端自动三方合并：base 存储 + 合并核心（conflictMode 为 off 时仍创建，handler 按设置决定是否使用）
+      // 服务端统一合并：本地保存已确认正文、草稿祖先和持久请求身份，handler 按 conflictMode 使用。
       this.baseStore = createBaseStore(this)
       await this.baseStore.load()
       this.noteCore = createNoteCore(this)
+      await this.noteCore.initialize()
       this.noteSweepTimer = window.setInterval(() => this.noteCore.sweep(), 5000)
       this.registerInterval(this.noteSweepTimer)
-      if (this.settings.conflictMode === "clientAutoMerge") {
-        // 启动后空闲时给 base 缺失的笔记补种子（本地内容 hash 恰等于已确认 syncHash 才存）
-        window.setTimeout(() => { void seedBases(this) }, 3000)
-      }
 
       // 崩溃恢复：从 localStorage 恢复持久化的 pending Map，过滤本地已不存在的路径
       // Crash recovery: restore persisted pending Maps, filtering out paths that no longer exist locally

@@ -137,7 +137,7 @@ export class WebSocketManager {
         const useProtoParam = "&protocol=protobuf";
         // pv=2：声明客户端支持 v2 握手协商（auth 响应携带协商块、窗口流水线、pb 提前升级）
         // pb=1/0：客户端本地 protobufEnabled 设置，供服务端判定是否提前升级 pb（设计稿 §2.2）
-        const isProtobufEnabled = this.plugin.settings.protobufEnabled !== false;
+        const isProtobufEnabled = this.plugin.settings.protobufEnabled !== false && !isAutoMerge(this.plugin);
         const negotiationParams = "&pv=2&pb=" + (isProtobufEnabled ? "1" : "0");
         return addRandomParam(
           this.plugin.runWsApi +
@@ -355,7 +355,7 @@ export class WebSocketManager {
           this.plugin.syncState.negotiated = negotiated;
           // protobufAck===true：服务端已在 auth 响应后提前 setUseProtobuf，本连接后续下行帧即为 pb，
           // 客户端同步跟进，无需再等 ClientInfo 响应触发升级（websocket_client.ts:259 该触发仍保留作旧服务端路径）
-          if (nego.protobufAck === true && this.plugin.settings.protobufEnabled !== false) {
+          if (nego.protobufAck === true && this.plugin.settings.protobufEnabled !== false && !isAutoMerge(this.plugin)) {
             this.client.useProtobuf = true;
             dump("WS Client upgraded to Protobuf via auth negotiation (pv2)");
           }
@@ -365,8 +365,23 @@ export class WebSocketManager {
         this.client.notifyStatusChange(true);
 
         this.sendClientInfo();
-        void this.StartHandle();
+        if (isAutoMerge(this.plugin)) this.client.Send("MergeCapabilities", {});
+        else void this.StartHandle();
       }
+      return;
+    }
+
+    if (msgAction === "MergeCapabilities") {
+      if (data.code > 0 && data.code < 300 && data.data?.mergeProtocol === 1 && data.data?.baseContent === true && data.data?.requestId === true) {
+        this.plugin.noteCore.setProtocolReady(true);
+        void this.plugin.noteCore.resume().then(async () => {
+          // Old 32-bit hashes cannot establish an exact ancestor during migration.
+          for (const file of this.plugin.app.vault.getMarkdownFiles()) {
+            if (this.plugin.noteCore.needsBaseline(file.path)) this.plugin.websocket.Send("NoteRePush", { vault: this.plugin.settings.vault, path: file.path, pathHash: hashContent(file.path) });
+          }
+          await this.StartHandle();
+        }).catch(e => dump("Safe merge startup failed", e));
+      } else showSyncNotice("服务端不支持安全合并协议，已保留本地内容并停止笔记同步", 10000);
       return;
     }
 
@@ -431,7 +446,10 @@ export class WebSocketManager {
           && this.plugin.pendingNoteModifies.has(data.data.path);
         // clientAutoMerge：无 context 的 NoteModifyAck 与实时 NoteSync* 推送不能丢（见 context_filter.ts），
         // 放行后打 realtime 标记，处理完不计入轮次进度。携带「别的」context 的仍丢弃。
-        if (!isControlMsg && !isPendingMtimeAck) {
+        const protocolNote = isAutoMerge(this.plugin) && data.data?.mergeProtocol === 1
+          && ["NoteModifyAck", "NoteDeleteAck", "NoteRenameAck", "NoteSyncModify", "NoteSyncDelete", "NoteSyncRename"].includes(msgAction);
+        if (protocolNote && data.context !== this.plugin.syncState.activeSyncContext) realtimeAdmitted = true;
+        if (!isControlMsg && !isPendingMtimeAck && !protocolNote) {
           const verdict = classifyContext({ action: msgAction, msgContext: data.context, activeContext: this.plugin.syncState.activeSyncContext, autoMerge: isAutoMerge(this.plugin) });
           if (verdict === "discard") {
             dump(`[SyncContext] Discard message ${msgAction} due to mismatched context. Expected: ${this.plugin.syncState.activeSyncContext}, Got: ${data.context}`);
@@ -473,7 +491,7 @@ export class WebSocketManager {
     }
 
     const clientName = this.plugin.getClientName();
-    const isProtobufEnabled = this.plugin.settings.protobufEnabled !== false;
+    const isProtobufEnabled = this.plugin.settings.protobufEnabled !== false && !isAutoMerge(this.plugin);
 
     if (!isProtobufEnabled) {
       // Reset client's Protobuf flag immediately to fallback to JSON format
@@ -492,7 +510,7 @@ export class WebSocketManager {
       isMacOS: Platform.isMacOS,
       isWin: Platform.isWin,
       isLinux: Platform.isLinux,
-      // clientAutoMerge：固定声明 manualMerge，只借用服务端的 baseHash CAS，合并全部在客户端完成（设置里的策略值不改写）
+      // 保留旧策略字段兼容握手；MergeCapabilities 确认后由协议 1 的服务端统一合并。
       offlineSyncStrategy: this.plugin.settings.conflictMode === "clientAutoMerge" ? "manualMerge" : this.plugin.settings.offlineSyncStrategy,
       protobuf: isProtobufEnabled,
     });
@@ -610,7 +628,7 @@ export class WebSocketManager {
          "serverHash:", serverHash, 
          "strategy:", this.plugin.settings.offlineSyncStrategy);
 
-    // clientAutoMerge：由 NoteMergeCore 做三方合并（先验 serverHash，不信任服务端 baseContent）
+    // 协议 1 正常返回 canonical ACK；旧冲突响应交给核心阻断，保留原请求和草稿。
     if (isAutoMerge(this.plugin) && path !== "") {
       const rawContent = payloadData && typeof payloadData === "object" ? (payloadData.serverContent ?? payloadData.ServerContent) : undefined;
       try {

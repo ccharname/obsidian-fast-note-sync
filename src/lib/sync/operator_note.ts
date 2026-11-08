@@ -19,7 +19,7 @@ export const noteModify = async function (file: TAbstractFile, plugin: FastSync,
   if (eventEnter && plugin.isIgnoredFile(file.path)) return
   if (isPathExcluded(file.path, plugin)) return
 
-  // clientAutoMerge：单飞上传 + 冲突闸 + 合并都在 NoteMergeCore 内（自己按路径加锁）
+  // 协议 1：核心按路径串行保留草稿祖先和请求身份，服务端决定合并结果。
   if (isAutoMerge(plugin)) {
     await plugin.noteCore.requestUpload(file.path, { kind: "edit" })
     return
@@ -100,7 +100,8 @@ export const noteDelete = async function (file: TAbstractFile, plugin: FastSync,
     return
   }
 
-  void forgetNote(plugin, file.path)
+  if (isAutoMerge(plugin)) { await forgetNote(plugin, file.path, undefined, true); return }
+  await forgetNote(plugin, file.path)
   await plugin.lockManager.withLock(file.path, async () => {
     // 清理可能存在的待确认上传记录，避免 pending map 内存泄漏
     // Clean up any pending note modify record to avoid memory leak
@@ -137,7 +138,8 @@ export const noteDeleteByPath = async function (filePath: string, plugin: FastSy
   if (isPathExcluded(filePath, plugin)) return
   if (plugin.lastSyncPathDeleted.has(filePath)) return
 
-  void forgetNote(plugin, filePath)
+  if (isAutoMerge(plugin)) { await forgetNote(plugin, filePath, undefined, true); return }
+  await forgetNote(plugin, filePath)
   await plugin.lockManager.withLock(filePath, async () => {
     // 清理可能存在的待确认上传记录，避免 pending map 内存泄漏
     // Clean up any pending note modify record to avoid memory leak
@@ -199,8 +201,9 @@ export const noteRename = async function (file: TAbstractFile, oldfile: string, 
     return
   }
 
+  if (isAutoMerge(plugin)) { await forgetNote(plugin, oldfile, file.path, true); return }
   // 重命名：base 随 key 迁移；旧路径的冲突状态/在途上传登记作废
-  void forgetNote(plugin, oldfile, file.path)
+  await forgetNote(plugin, oldfile, file.path)
   // 重命名涉及两个路径，我们锁定新路径，旧路径由调用方或原子性保证
   await plugin.lockManager.withLock(file.path, async () => {
     plugin.addIgnoredFile(file.path)
@@ -247,11 +250,12 @@ export const receiveNoteSyncModify = async function (data: ReceiveMessage, plugi
 
   const normalizedPath = normalizePath(data.path)
 
-  // clientAutoMerge：本地分叉判据与三方合并全部在 NoteMergeCore（基于 hash，不依赖内存 mtime/pending）
+  // 协议 1：只接受有版本的实际正文；本地草稿由核心保留祖先后交给服务端合并。
   if (isAutoMerge(plugin)) {
     try {
       const outcome = await plugin.noteCore.onRemote({
         path: normalizedPath, content: data.content, contentHash: data.contentHash, mtime: data.mtime, ctime: data.ctime,
+        revision: (data as ReceiveMessage & { revision?: string }).revision, mergeProtocol: (data as ReceiveMessage & { mergeProtocol?: number }).mergeProtocol,
       })
       if (outcome === "applied" || outcome === "confirmed" || outcome === "merged") {
         if (data.lastTime && data.lastTime > Number(plugin.localStorageManager.getMetadata("lastNoteSyncTime"))) {
@@ -454,16 +458,24 @@ export const receiveNoteUpload = async function (data: ReceivePathMessage, plugi
   // NeedPush-driven upload/ack round trip: the Ack (receiveNoteModifyAck) carries no pageIndex;
   // record the owning page by path here so the Ack can look it up on arrival (see sync_state.ts
   // pendingNotePushPageIndex comment)
-  if (data.pageIndex !== undefined) {
+  const alreadyWaiting = plugin.syncState.pendingNotePushPageIndex.has(file.path)
+  if (!alreadyWaiting) {
     plugin.syncState.pendingNotePushPageIndex.set(file.path, data.pageIndex)
   }
 
   if (isAutoMerge(plugin)) {
     // 单飞上传：Ack 才更新 base；该路径已有在途/处于冲突时不重复发送，直接归账本页
-    const outcome = await plugin.noteCore.requestUpload(file.path, { kind: "needpush", context: (data as ReceivePathMessage & { context?: string }).context })
-    if (outcome !== "sent") {
-      plugin.syncState.pendingNotePushPageIndex.delete(file.path)
+    try {
+      const outcome = await plugin.noteCore.requestUpload(file.path, { kind: "needpush", context: (data as ReceivePathMessage & { context?: string }).context })
+      if (outcome !== "sent") {
+        if (!alreadyWaiting) plugin.syncState.pendingNotePushPageIndex.delete(file.path)
+        plugin.recordSyncCompleted('note', data.pageIndex)
+      }
+    } catch (e) {
+      if (!alreadyWaiting) plugin.syncState.pendingNotePushPageIndex.delete(file.path)
+      plugin.noteSyncTasks.failed++
       plugin.recordSyncCompleted('note', data.pageIndex)
+      dumpError(`[FastSync] Failed to persist/send NeedPush: ${file.path}`, e)
     }
     return
   }
@@ -512,6 +524,12 @@ export const receiveNoteUpload = async function (data: ReceivePathMessage, plugi
  */
 export const receiveNoteSyncMtime = async function (data: ReceiveMtimeMessage, plugin: FastSync) {
   if (plugin.settings.syncEnabled == false) return
+  if (isAutoMerge(plugin)) {
+    // Metadata-only messages cannot acknowledge a protocol-1 request or prove text equality.
+    plugin.websocket.Send("NoteRePush", { vault: plugin.settings.vault, path: data.path, pathHash: hashContent(data.path) })
+    plugin.recordSyncCompleted('note', data.pageIndex)
+    return
+  }
   const pushPageIndex = plugin.syncState.pendingNotePushPageIndex.get(data.path);
   const completionPageIndex = pushPageIndex ?? data.pageIndex;
   plugin.syncState.pendingNotePushPageIndex.delete(data.path);
@@ -585,6 +603,7 @@ export const receiveNoteSyncDelete = async function (data: ReceiveMessage, plugi
 
   try {
     await plugin.lockManager.withLock(normalizedPath, async () => {
+      if (isAutoMerge(plugin) && !await plugin.noteCore.canApplyMutation(data.path, (data as ReceiveMessage & { revision?: string }).revision)) return
       const file = plugin.app.vault.getFileByPath(normalizedPath)
       if (file instanceof TFile) {
         if (blockAliasedRemoteMutation(plugin, file, data.path, "NoteDelete")) return
@@ -605,11 +624,13 @@ export const receiveNoteSyncDelete = async function (data: ReceiveMessage, plugi
         // 记录待删除路径，用于拦截本地删除事件
         plugin.lastSyncPathDeleted.add(normalizedPath)
         try {
+          if (isAutoMerge(plugin)) await plugin.noteCore.preserveLocal(normalizedPath, "remote-delete")
           await plugin.app.vault.trash(file, false)
+          if (isAutoMerge(plugin)) await plugin.noteCore.mutationApplied(normalizedPath, (data as ReceiveMessage & { revision: string }).revision)
           // 服务端推送删除,从哈希表中移除
           plugin.fileHashManager.removeFileHash(normalizedPath)
           plugin.lastSyncMtime.delete(normalizedPath)
-          void forgetNote(plugin, normalizedPath)
+          await forgetNote(plugin, normalizedPath)
           // 清理 pending，避免已删除路径的 pending 条目泄漏
           // Clean up pending to prevent memory leak for deleted path
           plugin.pendingNoteModifies.delete(normalizedPath)
@@ -678,11 +699,21 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
 
   const normalizedOldPath = normalizePath(data.oldPath)
   const normalizedNewPath = normalizePath(data.path)
+  const mutationRevision = (data as typeof data & { oldRevision?: string; revision?: string }).oldRevision ?? (data as typeof data & { revision?: string }).revision
 
   let divergedRename: TFile | null = null
   try {
-    // 对于重命名，我们需要确新路径不被占用。旧路径通常正在被移动，所以锁定新路径。
-    await plugin.lockManager.withLock(normalizedNewPath, async () => {
+    let ran = false
+    const apply = async () => {
+      ran = true
+      if (isAutoMerge(plugin)) {
+        if (!await plugin.noteCore.canApplyMutation(data.oldPath, mutationRevision)) return
+        if (plugin.noteCore.tracker.has(normalizedNewPath) || plugin.app.vault.getFileByPath(normalizedNewPath)) {
+          await plugin.noteCore.preserveLocal(normalizedNewPath, "rename-target-blocked")
+          plugin.websocket.Send("NoteRePush", { vault: plugin.settings.vault, path: data.path, pathHash: hashContent(data.path) })
+          return
+        }
+      }
       const file = plugin.app.vault.getFileByPath(normalizedOldPath)
       if (file instanceof TFile) {
         if (blockAliasedRemoteMutation(plugin, file, data.oldPath, "NoteRename")) return
@@ -697,10 +728,12 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
           // 如果目标路径已存在文件，先尝试删除
           const targetFile = plugin.app.vault.getFileByPath(normalizedNewPath)
           if (targetFile && targetFile !== file) {
+            if (isAutoMerge(plugin)) await plugin.noteCore.preserveLocal(normalizedNewPath, "rename-target")
             await plugin.app.vault.trash(targetFile, false)
           }
 
           await plugin.app.vault.rename(file, normalizedNewPath)
+          if (isAutoMerge(plugin)) await plugin.noteCore.mutationApplied(normalizedOldPath, mutationRevision!)
 
           // 更新元数据
           if (data.mtime) {
@@ -729,7 +762,8 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
           } else {
             plugin.fileHashManager.setFileHash(data.path, data.contentHash, data.mtime || (renamedFile instanceof TFile ? renamedFile.stat.mtime : 0), renamedFile instanceof TFile ? renamedFile.stat.size : 0)
           }
-          void forgetNote(plugin, data.oldPath, data.path)
+          await forgetNote(plugin, data.oldPath, data.path)
+          if (isAutoMerge(plugin)) plugin.websocket.Send("NoteRePush", { vault: plugin.settings.vault, path: data.path, pathHash: hashContent(data.path) })
 
           // 更新同步时间
           if (data.lastTime && data.lastTime > Number(plugin.localStorageManager.getMetadata("lastNoteSyncTime"))) {
@@ -768,7 +802,12 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
           plugin.fileHashManager.setFileHash(data.path, data.contentHash)
         }
       }
-    }, { maxRetries: 10, retryInterval: 100 });
+    }
+    if (isAutoMerge(plugin) && normalizedOldPath !== normalizedNewPath) {
+      const [first, second] = [normalizedOldPath, normalizedNewPath].sort()
+      await plugin.lockManager.withLock(first, () => plugin.lockManager.withLock(second, apply, { maxRetries: 10, retryInterval: 100 }), { maxRetries: 10, retryInterval: 100 })
+    } else await plugin.lockManager.withLock(normalizedNewPath, apply, { maxRetries: 10, retryInterval: 100 })
+    if (!ran) throw new Error("rename paths busy")
     if (divergedRename) {
       // 重命名后本地仍有未同步改动：锁释放后补一次上传（baseHash=沿用的旧确认值）
       const f: TFile = divergedRename
@@ -787,24 +826,29 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
 
 // 收到 NoteModifyAck，将 pending hash 转移到正式 hashManager 并更新 lastNoteSyncTime
 // Receive NoteModifyAck, move pending hash to formal hashManager and update lastNoteSyncTime
-export const receiveNoteModifyAck = function (data: { lastTime?: number; path?: string; realtime?: boolean }, plugin: FastSync) {
+export const receiveNoteModifyAck = async function (data: { lastTime?: number; path?: string; realtime?: boolean; requestId?: string; content?: string; contentHash?: string; revision?: string; mergeProtocol?: number; conflictPath?: string; deleted?: boolean }, plugin: FastSync) {
   // 冲突解决弹窗的上传：收到 Ack 才算解决，清冲突状态与 conflict-notes
-  if (data.path && plugin.syncState.pendingResolveAcks?.delete(normalizePath(data.path))) {
+  if (!isAutoMerge(plugin) && data.path && plugin.syncState.pendingResolveAcks?.delete(normalizePath(data.path))) {
     void clearConflictState(plugin, data.path)
   }
   if (isAutoMerge(plugin)) {
     // 单飞登记：Ack 对应刚发出的那份内容 → syncHash 前进、base ← 该内容；无登记的 Ack 视为迟到/重复，不动 base
-    if (data.path) {
-      void plugin.noteCore.onAck(normalizePath(data.path)).then((matched) => {
-        if (!matched) dump(`NoteModifyAck without registered upload (late/duplicate): ${data.path}`)
-      }).catch((e) => dumpError(`[FastSync] onAck failed: ${data.path}`, e))
+    if (!data.path) return
+    try {
+      const matched = await plugin.noteCore.onAck(normalizePath(data.path), { ...data, path: normalizePath(data.path), content: data.content as string, contentHash: data.contentHash as string })
+      if (!matched) return
+      plugin.syncState.pendingResolveAcks?.delete(normalizePath(data.path))
+    } catch (e) {
+      dumpError(`[FastSync] onAck failed: ${data.path}`, e)
+      return
     }
     if (data.lastTime && data.lastTime > Number(plugin.localStorageManager.getMetadata("lastNoteSyncTime"))) {
       plugin.localStorageManager.setMetadata("lastNoteSyncTime", data.lastTime)
     }
+    const hadPush = data.path ? plugin.syncState.pendingNotePushPageIndex.has(data.path) : false
     const pushPage = data.path ? plugin.syncState.pendingNotePushPageIndex.get(data.path) : undefined
     if (data.path) plugin.syncState.pendingNotePushPageIndex.delete(data.path)
-    if (!data.realtime) plugin.recordSyncCompleted('note', pushPage)
+    if (!data.realtime || hadPush) plugin.recordSyncCompleted('note', pushPage)
     return
   }
   // 服务端确认笔记写入成功，将 pending hash 转移到正式 hashManager
@@ -839,7 +883,13 @@ export const receiveNoteModifyAck = function (data: { lastTime?: number; path?: 
 
 // 收到 NoteRenameAck，按 data.path 精确匹配待确认条目并更新 hashManager；老服务端不下发 path 时回退 FIFO
 // Receive NoteRenameAck, match pending entry precisely by data.path and update hashManager; falls back to FIFO when legacy server omits path
-export const receiveNoteRenameAck = function (data: { lastTime?: number; path?: string }, plugin: FastSync) {
+export const receiveNoteRenameAck = async function (data: { lastTime?: number; path?: string; oldPath?: string; requestId?: string; revision?: string; mergeProtocol?: number; superseded?: boolean; oldRevision?: string }, plugin: FastSync) {
+  if (isAutoMerge(plugin)) {
+    if (!data.oldPath) return
+    const matched = await plugin.noteCore.onMutationAck(normalizePath(data.oldPath), data.requestId, data.revision, data.mergeProtocol, data.superseded, data.oldRevision)
+    if (matched) plugin.fileHashManager.removeFileHash(data.oldPath)
+    return
+  }
   let pending: { oldPath: string; newPath: string; contentHash: string } | undefined
   if (data.path) {
     pending = plugin.pendingNoteRenames.get(data.path)
@@ -867,7 +917,13 @@ export const receiveNoteRenameAck = function (data: { lastTime?: number; path?: 
 
 // 收到 NoteDeleteAck，仅当路径仍在 pending set 中时才从 hashManager 移除
 // Receive NoteDeleteAck; only remove from hashManager if path is still pending
-export const receiveNoteDeleteAck = function (data: { lastTime?: number; path?: string }, plugin: FastSync) {
+export const receiveNoteDeleteAck = async function (data: { lastTime?: number; path?: string; requestId?: string; revision?: string; mergeProtocol?: number; superseded?: boolean }, plugin: FastSync) {
+  if (isAutoMerge(plugin)) {
+    if (!data.path) return
+    const matched = await plugin.noteCore.onMutationAck(normalizePath(data.path), data.requestId, data.revision, data.mergeProtocol, data.superseded)
+    if (matched) plugin.fileHashManager.removeFileHash(data.path)
+    return
+  }
   if (data.path && plugin.pendingNoteDeleteAcks.has(data.path)) {
     plugin.fileHashManager.removeFileHash(data.path)
     plugin.pendingNoteDeleteAcks.delete(data.path)

@@ -65,7 +65,7 @@ export class SyncState {
    * NeedPush) correctly falls back to the pageIndex-less legacy path — such items never belonged to
    * a page in the first place.
    */
-  pendingNotePushPageIndex = new Map<string, number>();
+  pendingNotePushPageIndex = new Map<string, number | undefined>();
   pendingFilePushPageIndex = new Map<string, number>();
   pendingConfigPushPageIndex = new Map<string, number>();
 

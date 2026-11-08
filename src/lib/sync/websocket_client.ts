@@ -23,6 +23,7 @@ export interface AppStoragePlugin {
   };
   settings?: {
     protobufEnabled?: boolean;
+    conflictMode?: string;
   };
 }
 
@@ -258,7 +259,7 @@ export class WebSocketClient {
                   
                   // Only upgrade to Protobuf if the setting is enabled locally
                   // 仅在本地设置启用时才升级为 Protobuf
-                  if (result.action === "ClientInfo" && this.plugin.settings?.protobufEnabled !== false) {
+                  if (result.action === "ClientInfo" && this.plugin.settings?.protobufEnabled !== false && this.plugin.settings?.conflictMode !== "clientAutoMerge") {
                     this.useProtobuf = true;
                     dump("WS Client upgraded to Protobuf successfully");
                   }
