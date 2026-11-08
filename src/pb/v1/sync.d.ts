@@ -1277,6 +1277,15 @@ export namespace proto {
             /** NoteModifyOrCreateRequest isConflictResolved. */
             isConflictResolved: boolean;
 
+            /** NoteModifyOrCreateRequest serverMerge. */
+            serverMerge: boolean;
+
+            /** NoteModifyOrCreateRequest opId. */
+            opId: string;
+
+            /** NoteModifyOrCreateRequest baseSha. */
+            baseSha: string;
+
             /**
              * Creates a new NoteModifyOrCreateRequest instance using the specified properties.
              * @param [properties] Properties to set
@@ -1396,6 +1405,15 @@ export namespace proto {
 
                 /** NoteModifyOrCreateRequest isConflictResolved */
                 isConflictResolved?: (boolean|null);
+
+                /** NoteModifyOrCreateRequest serverMerge */
+                serverMerge?: (boolean|null);
+
+                /** NoteModifyOrCreateRequest opId */
+                opId?: (string|null);
+
+                /** NoteModifyOrCreateRequest baseSha */
+                baseSha?: (string|null);
 
                 /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
@@ -1581,6 +1599,15 @@ export namespace proto {
             /** NoteDeleteRequest context. */
             context: string;
 
+            /** NoteDeleteRequest baseSha. */
+            baseSha: string;
+
+            /** NoteDeleteRequest opId. */
+            opId: string;
+
+            /** NoteDeleteRequest serverMerge. */
+            serverMerge: boolean;
+
             /**
              * Creates a new NoteDeleteRequest instance using the specified properties.
              * @param [properties] Properties to set
@@ -1677,6 +1704,15 @@ export namespace proto {
                 /** NoteDeleteRequest context */
                 context?: (string|null);
 
+                /** NoteDeleteRequest baseSha */
+                baseSha?: (string|null);
+
+                /** NoteDeleteRequest opId */
+                opId?: (string|null);
+
+                /** NoteDeleteRequest serverMerge */
+                serverMerge?: (boolean|null);
+
                 /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
@@ -1720,6 +1756,15 @@ export namespace proto {
 
             /** NoteRenameRequest context. */
             context: string;
+
+            /** NoteRenameRequest baseSha. */
+            baseSha: string;
+
+            /** NoteRenameRequest opId. */
+            opId: string;
+
+            /** NoteRenameRequest serverMerge. */
+            serverMerge: boolean;
 
             /**
              * Creates a new NoteRenameRequest instance using the specified properties.
@@ -1822,6 +1867,15 @@ export namespace proto {
 
                 /** NoteRenameRequest context */
                 context?: (string|null);
+
+                /** NoteRenameRequest baseSha */
+                baseSha?: (string|null);
+
+                /** NoteRenameRequest opId */
+                opId?: (string|null);
+
+                /** NoteRenameRequest serverMerge */
+                serverMerge?: (boolean|null);
 
                 /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
@@ -2004,6 +2058,12 @@ export namespace proto {
             /** NoteSyncModifyMessage lastTime. */
             lastTime: (number|Long);
 
+            /** NoteSyncModifyMessage rev. */
+            rev: (number|Long);
+
+            /** NoteSyncModifyMessage sha. */
+            sha: string;
+
             /**
              * Creates a new NoteSyncModifyMessage instance using the specified properties.
              * @param [properties] Properties to set
@@ -2109,6 +2169,12 @@ export namespace proto {
                 /** NoteSyncModifyMessage lastTime */
                 lastTime?: (number|Long|null);
 
+                /** NoteSyncModifyMessage rev */
+                rev?: (number|Long|null);
+
+                /** NoteSyncModifyMessage sha */
+                sha?: (string|null);
+
                 /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
@@ -2152,6 +2218,9 @@ export namespace proto {
 
             /** NoteSyncDeleteMessage lastTime. */
             lastTime: (number|Long);
+
+            /** NoteSyncDeleteMessage rev. */
+            rev: (number|Long);
 
             /**
              * Creates a new NoteSyncDeleteMessage instance using the specified properties.
@@ -2255,6 +2324,9 @@ export namespace proto {
                 /** NoteSyncDeleteMessage lastTime */
                 lastTime?: (number|Long|null);
 
+                /** NoteSyncDeleteMessage rev */
+                rev?: (number|Long|null);
+
                 /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
@@ -2307,6 +2379,12 @@ export namespace proto {
 
             /** NoteSyncRenameMessage lastTime. */
             lastTime: (number|Long);
+
+            /** NoteSyncRenameMessage rev. */
+            rev: (number|Long);
+
+            /** NoteSyncRenameMessage sha. */
+            sha: string;
 
             /**
              * Creates a new NoteSyncRenameMessage instance using the specified properties.
@@ -2418,6 +2496,12 @@ export namespace proto {
 
                 /** NoteSyncRenameMessage lastTime */
                 lastTime?: (number|Long|null);
+
+                /** NoteSyncRenameMessage rev */
+                rev?: (number|Long|null);
+
+                /** NoteSyncRenameMessage sha */
+                sha?: (string|null);
 
                 /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
@@ -2868,6 +2952,30 @@ export namespace proto {
             /** NoteModifyAckMessage pathHash. */
             pathHash: string;
 
+            /** NoteModifyAckMessage opId. */
+            opId: string;
+
+            /** NoteModifyAckMessage rev. */
+            rev: (number|Long);
+
+            /** NoteModifyAckMessage sha. */
+            sha: string;
+
+            /** NoteModifyAckMessage merged. */
+            merged: boolean;
+
+            /** NoteModifyAckMessage content. */
+            content: string;
+
+            /** NoteModifyAckMessage conflictCopy. */
+            conflictCopy: string;
+
+            /** NoteModifyAckMessage rejected. */
+            rejected: boolean;
+
+            /** NoteModifyAckMessage rejectReason. */
+            rejectReason: string;
+
             /**
              * Creates a new NoteModifyAckMessage instance using the specified properties.
              * @param [properties] Properties to set
@@ -2961,6 +3069,30 @@ export namespace proto {
                 /** NoteModifyAckMessage pathHash */
                 pathHash?: (string|null);
 
+                /** NoteModifyAckMessage opId */
+                opId?: (string|null);
+
+                /** NoteModifyAckMessage rev */
+                rev?: (number|Long|null);
+
+                /** NoteModifyAckMessage sha */
+                sha?: (string|null);
+
+                /** NoteModifyAckMessage merged */
+                merged?: (boolean|null);
+
+                /** NoteModifyAckMessage content */
+                content?: (string|null);
+
+                /** NoteModifyAckMessage conflictCopy */
+                conflictCopy?: (string|null);
+
+                /** NoteModifyAckMessage rejected */
+                rejected?: (boolean|null);
+
+                /** NoteModifyAckMessage rejectReason */
+                rejectReason?: (string|null);
+
                 /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
@@ -2995,6 +3127,30 @@ export namespace proto {
 
             /** NoteRenameAckMessage pathHash. */
             pathHash: string;
+
+            /** NoteRenameAckMessage opId. */
+            opId: string;
+
+            /** NoteRenameAckMessage rev. */
+            rev: (number|Long);
+
+            /** NoteRenameAckMessage sha. */
+            sha: string;
+
+            /** NoteRenameAckMessage merged. */
+            merged: boolean;
+
+            /** NoteRenameAckMessage content. */
+            content: string;
+
+            /** NoteRenameAckMessage conflictCopy. */
+            conflictCopy: string;
+
+            /** NoteRenameAckMessage rejected. */
+            rejected: boolean;
+
+            /** NoteRenameAckMessage rejectReason. */
+            rejectReason: string;
 
             /**
              * Creates a new NoteRenameAckMessage instance using the specified properties.
@@ -3089,6 +3245,30 @@ export namespace proto {
                 /** NoteRenameAckMessage pathHash */
                 pathHash?: (string|null);
 
+                /** NoteRenameAckMessage opId */
+                opId?: (string|null);
+
+                /** NoteRenameAckMessage rev */
+                rev?: (number|Long|null);
+
+                /** NoteRenameAckMessage sha */
+                sha?: (string|null);
+
+                /** NoteRenameAckMessage merged */
+                merged?: (boolean|null);
+
+                /** NoteRenameAckMessage content */
+                content?: (string|null);
+
+                /** NoteRenameAckMessage conflictCopy */
+                conflictCopy?: (string|null);
+
+                /** NoteRenameAckMessage rejected */
+                rejected?: (boolean|null);
+
+                /** NoteRenameAckMessage rejectReason */
+                rejectReason?: (string|null);
+
                 /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];
             }
@@ -3123,6 +3303,30 @@ export namespace proto {
 
             /** NoteDeleteAckMessage pathHash. */
             pathHash: string;
+
+            /** NoteDeleteAckMessage opId. */
+            opId: string;
+
+            /** NoteDeleteAckMessage rev. */
+            rev: (number|Long);
+
+            /** NoteDeleteAckMessage sha. */
+            sha: string;
+
+            /** NoteDeleteAckMessage merged. */
+            merged: boolean;
+
+            /** NoteDeleteAckMessage content. */
+            content: string;
+
+            /** NoteDeleteAckMessage conflictCopy. */
+            conflictCopy: string;
+
+            /** NoteDeleteAckMessage rejected. */
+            rejected: boolean;
+
+            /** NoteDeleteAckMessage rejectReason. */
+            rejectReason: string;
 
             /**
              * Creates a new NoteDeleteAckMessage instance using the specified properties.
@@ -3216,6 +3420,30 @@ export namespace proto {
 
                 /** NoteDeleteAckMessage pathHash */
                 pathHash?: (string|null);
+
+                /** NoteDeleteAckMessage opId */
+                opId?: (string|null);
+
+                /** NoteDeleteAckMessage rev */
+                rev?: (number|Long|null);
+
+                /** NoteDeleteAckMessage sha */
+                sha?: (string|null);
+
+                /** NoteDeleteAckMessage merged */
+                merged?: (boolean|null);
+
+                /** NoteDeleteAckMessage content */
+                content?: (string|null);
+
+                /** NoteDeleteAckMessage conflictCopy */
+                conflictCopy?: (string|null);
+
+                /** NoteDeleteAckMessage rejected */
+                rejected?: (boolean|null);
+
+                /** NoteDeleteAckMessage rejectReason */
+                rejectReason?: (string|null);
 
                 /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];

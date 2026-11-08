@@ -14,6 +14,8 @@ const NON_RECONNECT_REASONS = new Set([
 ]);
 
 export interface AppStoragePlugin {
+  /** 插件已卸载：旧实例不得再建连 / 重连 */
+  unloaded?: boolean;
   app: {
     vault: {
       getName: () => string;
@@ -23,7 +25,6 @@ export interface AppStoragePlugin {
   };
   settings?: {
     protobufEnabled?: boolean;
-    conflictMode?: string;
   };
 }
 
@@ -138,6 +139,7 @@ export class WebSocketClient {
   }
 
   public async register() {
+    if (this.plugin.unloaded) return; // 卸载后的旧实例不得再建连
     if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
       dump("WebSocket already connecting or open, skipping register");
       return;
@@ -192,7 +194,7 @@ export class WebSocketClient {
       };
 
       this.ws.onopen = (e: Event): void => {
-        this.timeConnect = 0;
+        // 退避计数不在 open 时清零：连上但认证失败 / 立刻被断开会形成每秒一次的重连风暴，改由认证成功后 resetBackoff()
         this.hasNotifiedReconnectFailure = false;
         this.isAuth = false;
         this.useProtobuf = false;
@@ -259,7 +261,7 @@ export class WebSocketClient {
                   
                   // Only upgrade to Protobuf if the setting is enabled locally
                   // 仅在本地设置启用时才升级为 Protobuf
-                  if (result.action === "ClientInfo" && this.plugin.settings?.protobufEnabled !== false && this.plugin.settings?.conflictMode !== "clientAutoMerge") {
+                  if (result.action === "ClientInfo" && this.plugin.settings?.protobufEnabled !== false) {
                     this.useProtobuf = true;
                     dump("WS Client upgraded to Protobuf successfully");
                   }
@@ -334,6 +336,7 @@ export class WebSocketClient {
 
   public checkReconnect() {
     window.clearTimeout(this.checkReConnectTimeout);
+    if (this.plugin.unloaded) return;
     // 不再设硬上限：超过原上限（15 次）后仍持续重试，退避延迟封顶 30 分钟；
     // 首次达到原上限时提示用户一次，之后静默在后台继续重试
     if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
@@ -345,9 +348,11 @@ export class WebSocketClient {
       }
 
       // Delay backoff: first 3 times 1s, then exponential growth up to 30 min
-      const delay = this.timeConnect <= 3
+      const baseDelay = this.timeConnect <= 3
         ? RECONNECT_BASE_DELAY
         : Math.min(RECONNECT_BASE_DELAY * Math.pow(2, this.timeConnect - 3), 1800000);
+      // ±20% 抖动，避免服务端重启后所有客户端同一时刻回连
+      const delay = Math.round(baseDelay * (0.8 + Math.random() * 0.4));
 
       dump(`Service waiting reconnect: ${this.timeConnect}, delay: ${delay}ms`);
 
@@ -355,6 +360,12 @@ export class WebSocketClient {
         void this.register();
       }, delay);
     }
+  }
+
+  /** 认证成功后调用：此时才算连接真正恢复 */
+  public resetBackoff() {
+    this.timeConnect = 0;
+    this.hasNotifiedReconnectFailure = false;
   }
 
   public triggerReconnect() {

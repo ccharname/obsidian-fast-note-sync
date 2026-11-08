@@ -1,7 +1,7 @@
-import { conflictStem } from "./conflict_paths";
 import { moment, Platform, normalizePath } from "obsidian";
 
 import { handleFileChunkDownload, BINARY_PREFIX_FILE_SYNC, clearUploadQueue, receiveFileUploadSessionNotFound } from "./operator_file";
+import { effectiveStrategy, markFullReconcile } from "./server_merge_client";
 import { dump, addRandomParam, showSyncNotice, safeStringify, getPluginDir, hashContent } from "../utils/helpers";
 import { enSendDTOToProtobuf, deReceivePacket } from "../../pb/protobuf_mapper";
 import { receiveOperators, startupSync, startupFullSync, settleAllBatchSendSessionsOnClose } from "./operator";
@@ -11,8 +11,6 @@ import { WebSocketClient } from "./websocket_client";
 import { CLIENT_TYPE } from "../utils/types";
 import type FastSync from "../../main";
 import { $ } from "../../i18n/lang";
-import { isAutoMerge } from "./note_core_deps";
-import { classifyContext } from "./context_filter";
 
 
 // 冲突相关错误码
@@ -137,7 +135,7 @@ export class WebSocketManager {
         const useProtoParam = "&protocol=protobuf";
         // pv=2：声明客户端支持 v2 握手协商（auth 响应携带协商块、窗口流水线、pb 提前升级）
         // pb=1/0：客户端本地 protobufEnabled 设置，供服务端判定是否提前升级 pb（设计稿 §2.2）
-        const isProtobufEnabled = this.plugin.settings.protobufEnabled !== false && !isAutoMerge(this.plugin);
+        const isProtobufEnabled = this.plugin.settings.protobufEnabled !== false;
         const negotiationParams = "&pv=2&pb=" + (isProtobufEnabled ? "1" : "0");
         return addRandomParam(
           this.plugin.runWsApi +
@@ -181,8 +179,9 @@ export class WebSocketManager {
         }
         clearUploadQueue();
         this.plugin.concurrencyLimiter.clear();
-        // 断线：在途笔记上传全部作废（服务端是否收到未知，重连后的同步轮次会重新对账）
-        this.plugin.noteCore?.onDisconnect();
+        this.plugin.serverMerge?.reset();
+        // 4001 resyncRequired：服务端已丢弃积压，下次连接必须完整对账，不能走增量水位
+        markFullReconcile(code, (f, v) => (this.plugin.localStorageManager.setMetadata as (k: string, v: unknown) => void)(f, v));
         // 断线：清空所有在途上行批发送窗口会话的重传 timer（设计稿 §3.2 异常路径表）；
         // W==0/旧路径下没有会话注册，no-op
         settleAllBatchSendSessionsOnClose();
@@ -300,6 +299,8 @@ export class WebSocketManager {
   }
 
   private handleStructuredMessage(msgAction: string, data: unknown) {
+    // 插件已卸载：旧实例的连接即使还没断干净，也不得再处理任何推送 / 写盘
+    if (this.plugin.unloaded) return;
     if (!this.isStructuredMessageData(data)) {
       return;
     }
@@ -315,6 +316,13 @@ export class WebSocketManager {
         return;
       } else {
         this.client.isAuth = true;
+        this.client.resetBackoff(); // 认证成功才算连接恢复
+        // 能力协商：认证响应 features 含 serverMerge 才发 serverMerge 写请求；否则整个会话按上游行为
+        const features = data.data?.["features"];
+        if (this.plugin.serverMerge) {
+          this.plugin.serverMerge.supported = Array.isArray(features) && features.includes("serverMerge");
+          this.plugin.serverMerge.onAuthenticated(); // 认证成功后才重置超时重发的退避计数
+        }
         const paths = (data.data?.["paths"] as string[]) || [];
         this.plugin.shareIndicatorManager?.updateSharedPaths(paths);
         if (data.data) {
@@ -355,7 +363,7 @@ export class WebSocketManager {
           this.plugin.syncState.negotiated = negotiated;
           // protobufAck===true：服务端已在 auth 响应后提前 setUseProtobuf，本连接后续下行帧即为 pb，
           // 客户端同步跟进，无需再等 ClientInfo 响应触发升级（websocket_client.ts:259 该触发仍保留作旧服务端路径）
-          if (nego.protobufAck === true && this.plugin.settings.protobufEnabled !== false && !isAutoMerge(this.plugin)) {
+          if (nego.protobufAck === true && this.plugin.settings.protobufEnabled !== false) {
             this.client.useProtobuf = true;
             dump("WS Client upgraded to Protobuf via auth negotiation (pv2)");
           }
@@ -365,23 +373,8 @@ export class WebSocketManager {
         this.client.notifyStatusChange(true);
 
         this.sendClientInfo();
-        if (isAutoMerge(this.plugin)) this.client.Send("MergeCapabilities", {});
-        else void this.StartHandle();
+        void this.StartHandle();
       }
-      return;
-    }
-
-    if (msgAction === "MergeCapabilities") {
-      if (data.code > 0 && data.code < 300 && data.data?.mergeProtocol === 1 && data.data?.baseContent === true && data.data?.requestId === true) {
-        this.plugin.noteCore.setProtocolReady(true);
-        void this.plugin.noteCore.resume().then(async () => {
-          // Old 32-bit hashes cannot establish an exact ancestor during migration.
-          for (const file of this.plugin.app.vault.getMarkdownFiles()) {
-            if (this.plugin.noteCore.needsBaseline(file.path)) this.plugin.websocket.Send("NoteRePush", { vault: this.plugin.settings.vault, path: file.path, pathHash: hashContent(file.path) });
-          }
-          await this.StartHandle();
-        }).catch(e => dump("Safe merge startup failed", e));
-      } else showSyncNotice("服务端不支持安全合并协议，已保留本地内容并停止笔记同步", 10000);
       return;
     }
 
@@ -434,7 +427,6 @@ export class WebSocketManager {
         return;
       }
 
-      let realtimeAdmitted = false;
       // 基于 Context 进行过滤：如果处于活跃的同步中，必须完全匹配
       // Filter based on Context: if there's an active sync context, incoming messages (including Acks) must match
       if (this.plugin.syncState.activeSyncContext) {
@@ -444,18 +436,14 @@ export class WebSocketManager {
         const isPendingMtimeAck = msgAction === WSAction.NoteSyncMtime && !data.context
           && typeof data.data?.path === 'string'
           && this.plugin.pendingNoteModifies.has(data.data.path);
-        // clientAutoMerge：无 context 的 NoteModifyAck 与实时 NoteSync* 推送不能丢（见 context_filter.ts），
-        // 放行后打 realtime 标记，处理完不计入轮次进度。携带「别的」context 的仍丢弃。
-        const protocolNote = isAutoMerge(this.plugin) && data.data?.mergeProtocol === 1
-          && ["NoteModifyAck", "NoteDeleteAck", "NoteRenameAck", "NoteSyncModify", "NoteSyncDelete", "NoteSyncRename"].includes(msgAction);
-        if (protocolNote && data.context !== this.plugin.syncState.activeSyncContext) realtimeAdmitted = true;
-        if (!isControlMsg && !isPendingMtimeAck && !protocolNote) {
-          const verdict = classifyContext({ action: msgAction, msgContext: data.context, activeContext: this.plugin.syncState.activeSyncContext, autoMerge: isAutoMerge(this.plugin) });
-          if (verdict === "discard") {
-            dump(`[SyncContext] Discard message ${msgAction} due to mismatched context. Expected: ${this.plugin.syncState.activeSyncContext}, Got: ${data.context}`);
-            return;
-          }
-          if (verdict === "realtime") realtimeAdmitted = true;
+        // serverMerge 会话：带 rev 的笔记推送（含冲突副本的广播，其信封 context 为空）不受同步轮过滤，
+        // 安全性由 rev 门控（admit / onPush）保证；否则离线重连处于同步轮时会静默丢掉副本
+        const isRevPush = !!this.plugin.serverMerge?.supported && !data.context
+          && (msgAction === WSAction.NoteSyncModify || msgAction === WSAction.NoteSyncDelete || msgAction === WSAction.NoteSyncRename)
+          && Number(data.data?.rev) > 0;
+        if (!isControlMsg && !isPendingMtimeAck && !isRevPush && data.context !== this.plugin.syncState.activeSyncContext) {
+          dump(`[SyncContext] Discard message ${msgAction} due to mismatched context. Expected: ${this.plugin.syncState.activeSyncContext}, Got: ${data.context}`);
+          return;
         }
       }
 
@@ -476,7 +464,6 @@ export class WebSocketManager {
           const merged = { ...data.data };
           if (data.context) merged.context = data.context;
           if (pageIndex !== undefined) merged.pageIndex = pageIndex;
-          if (realtimeAdmitted) merged.realtime = true;
           payload = merged;
         }
         void handler(payload, this.plugin);
@@ -491,7 +478,7 @@ export class WebSocketManager {
     }
 
     const clientName = this.plugin.getClientName();
-    const isProtobufEnabled = this.plugin.settings.protobufEnabled !== false && !isAutoMerge(this.plugin);
+    const isProtobufEnabled = this.plugin.settings.protobufEnabled !== false;
 
     if (!isProtobufEnabled) {
       // Reset client's Protobuf flag immediately to fallback to JSON format
@@ -510,8 +497,7 @@ export class WebSocketManager {
       isMacOS: Platform.isMacOS,
       isWin: Platform.isWin,
       isLinux: Platform.isLinux,
-      // 保留旧策略字段兼容握手；MergeCapabilities 确认后由协议 1 的服务端统一合并。
-      offlineSyncStrategy: this.plugin.settings.conflictMode === "clientAutoMerge" ? "manualMerge" : this.plugin.settings.offlineSyncStrategy,
+      offlineSyncStrategy: effectiveStrategy(!!this.plugin.serverMerge?.supported, this.plugin.settings.offlineSyncStrategy),
       protobuf: isProtobufEnabled,
     });
   }
@@ -628,24 +614,7 @@ export class WebSocketManager {
          "serverHash:", serverHash, 
          "strategy:", this.plugin.settings.offlineSyncStrategy);
 
-    // 协议 1 正常返回 canonical ACK；旧冲突响应交给核心阻断，保留原请求和草稿。
-    if (isAutoMerge(this.plugin) && path !== "") {
-      const rawContent = payloadData && typeof payloadData === "object" ? (payloadData.serverContent ?? payloadData.ServerContent) : undefined;
-      try {
-        await this.plugin.noteCore.onConflict({
-          path,
-          serverContent: typeof rawContent === "string" ? rawContent : undefined,
-          serverHash: serverHash || undefined,
-          baseContent,
-        });
-      } catch (e) {
-        dump("[ConflictDebug] auto-merge on 530 failed:", e);
-        showSyncNotice($("ui.status.conflict", { path: path }), 10000);
-      }
-      return;
-    }
-
-    if (this.plugin.settings.offlineSyncStrategy === "manualMerge" &&
+    if (effectiveStrategy(!!this.plugin.serverMerge?.supported, this.plugin.settings.offlineSyncStrategy) === "manualMerge" &&
         path !== "" && serverContent !== "" && serverHash !== "") {
       
       const conflictData = {
@@ -672,9 +641,10 @@ export class WebSocketManager {
           await adapter.mkdir(conflictDir);
         }
 
-        const stem = conflictStem(path, hashContent);
-        const baseBackupPath = `${conflictDir}/${stem}.base.md`;
-        const remoteBackupPath = `${conflictDir}/${stem}.remote.md`;
+        const safeName = path.replace(/\.md$/, "").replace(/[/\\]/g, "_");
+        const pathHash = hashContent(path);
+        const baseBackupPath = `${conflictDir}/${safeName}_${pathHash}.base.md`;
+        const remoteBackupPath = `${conflictDir}/${safeName}_${pathHash}.remote.md`;
 
         await adapter.write(baseBackupPath, baseContent);
         await adapter.write(remoteBackupPath, serverContent);

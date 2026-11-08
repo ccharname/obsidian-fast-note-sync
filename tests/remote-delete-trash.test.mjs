@@ -9,8 +9,7 @@ class TFolder { constructor(path) { this.path = path; this.children = []; } }
 const helpers = { dump: noop, dumpError: noop, isPathExcluded: () => false,
   isFolderSyncPathExcluded: () => false, configIsPathExcluded: () => false,
   isPathInConfigSyncDirs: () => true, waitForFolderEmpty: async () => true,
-  checkAndNotifyCaseConflict: () => false, isLargeBinarySyncRisk: () => false,
-  hashContentAsync: async s => s };
+  checkAndNotifyCaseConflict: () => false, isLargeBinarySyncRisk: () => false };
 let guardModule; // #291 路径别名 guard 用真实实现 / real #291 alias guard
 let permanentCalls = 0;
 const forbidden = () => { permanentCalls++; throw new Error('permanent deletion must not be used'); };
@@ -22,8 +21,6 @@ function load(file) {
   vm.runInNewContext(code, { module, exports: module.exports, console,
     window: { setTimeout: fn => { fn(); return 1; } },
     require: id => id === 'obsidian' ? { TFile, TFolder, normalizePath: x => x.replace(/\\/g, '/') }
-      : id.includes('conflict_paths') ? { conflictStem: (p, h) => p.replace(/\.md$/, '') + '_' + h(p) }
-      : id.includes('note_core_deps') ? { isAutoMerge: () => false, forgetNote: async () => {}, clearConflictState: async () => {}, conflictFilePaths: () => ({}) }
       : id.includes('helpers_obsidian_bypass') ? { ...helpers, vaultDelete: forbidden }
       : id.includes('helpers') ? { ...helpers, vaultDelete: forbidden }
       : id.includes('remote_path_guard') ? (guardModule ??= load('src/lib/sync/remote_path_guard.ts'))
@@ -44,14 +41,14 @@ function fixture(kind, fail = false) {
     if (fail) throw new Error('trash unavailable');
   };
   const p = {
-    settings: { syncEnabled: true, configSyncEnabled: true },
+    settings: { syncEnabled: true, configSyncEnabled: true }, serverMerge: { supported: false },
     app: { vault: { getFileByPath: () => item, getAbstractFileByPath: () => item,
-      trash, delete: forbidden, read: async () => 'x',
+      trash, delete: forbidden,
       adapter: { exists: async () => true, trashLocal: path => trash(path, false), remove: forbidden } } },
     lockManager: { withLock: async (_, fn) => fn() },
     addIgnoredFile: noop, removeIgnoredFile: noop, ignoredConfigFiles: new Set(),
     lastSyncPathDeleted: new Set(), lastSyncMtime: new Map(), pendingNoteModifies: new Map(),
-    fileHashManager: { removeFileHash: path => removedHashes.push(path), getPathHash: () => 'x' },
+    fileHashManager: { removeFileHash: path => removedHashes.push(path) },
     configHashManager: { isReady: () => true, removeFileHash: path => removedHashes.push(path) },
     configManager: { removeFileState: noop }, folderSnapshotManager: { removeFolder: noop },
     localStorageManager: { savePending: noop, getMetadata: () => 0, setMetadata: noop },

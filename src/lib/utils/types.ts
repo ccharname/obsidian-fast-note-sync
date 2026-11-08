@@ -39,9 +39,10 @@ export interface ReceiveMessage {
     ctime: number;
     mtime: number;
     lastTime: number;
+    /** serverMerge：服务端 rev 与正文 sha256（所有推送都带） */
+    rev?: number;
+    sha?: string;
     context?: string;
-    /** 同步轮次中放行的无 context 实时消息（不计入轮次进度） */
-    realtime?: boolean;
     // 所属下载页（0-based，内部值，由 websocket_manager.ts 从 WSResponse 信封 1-based 转换后并入 payload）；
     // 旧服务端/非分页项为 undefined，下游按 undefined 走旧的单页全局计数路径（设计稿 §4.3）
     // Owning download page (0-based, internal value, merged into payload by websocket_manager.ts

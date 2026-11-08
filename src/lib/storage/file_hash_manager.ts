@@ -15,10 +15,40 @@ interface HashCache {
  * 文件哈希管理器
  * 负责管理文件路径与哈希值的映射关系,存储在 localStorage 中
  */
+const MAX_TOMBSTONES = 2000;
+
+// sha256 hex(64) <-> base64 无填充(43)：持久化更紧凑，内存里仍用 hex 与服务端对齐
+const nib = (c: number): number => (c <= 57 ? c - 48 : c - 87); // '0'-'9' / 'a'-'f'
+const hexToB64 = (hex: string): string => {
+  if (hex.length !== 64) return hex;
+  let bin = "";
+  for (let i = 0; i < 64; i += 2) bin += String.fromCharCode((nib(hex.charCodeAt(i)) << 4) | nib(hex.charCodeAt(i + 1)));
+  return btoa(bin).slice(0, 43);
+};
+const b64ToHex = (b64: string): string => {
+  if (b64.length !== 43) return b64;
+  let hex = "";
+  for (const ch of atob(b64)) hex += ch.charCodeAt(0).toString(16).padStart(2, "0");
+  return hex;
+};
+
 export class FileHashManager {
   private plugin: FastSync;
   private hashMap: Map<string, HashCache> = new Map();
   private syncHashMap: Map<string, string> = new Map(); // path -> baseHash
+  // serverMerge：与 syncHashMap 同生命周期的附加元数据（sha256 与服务端 rev），随 syncHashMap 同键持久化
+  private shaMap: Map<string, string> = new Map(); // 值为 base64(无填充) 的 sha256，API 边界转 hex
+  private revMap: Map<string, number> = new Map();
+  // 路径墓碑：删除时的 rev，拒绝 rev ≤ 墓碑的迟到消息（分页 / 广播可乱序）。插入序即淘汰序，条数封顶
+  private tombMap: Map<string, number> = new Map();
+  private tombStorageKey = `fns-syncTombstones`;
+  private tombPersisted = false;
+  // 淘汰墓碑的安全水位只保护未知路径；不冒充该路径的精确 rev。
+  private tombFloor = 0;
+  // 完整全量已交付的水位保护所有路径，拒绝各广播通道迟到的旧消息。
+  private reconcileFloor = 0;
+  // 当前分页对账的精确墓碑（含期间淘汰的项）；随轮次结束释放，不扩大永久墓碑上限。
+  private reconcileTombs: Map<string, number> | null = null;
   private storageKey: string;
   private syncStorageKey: string;
   private isInitialized: boolean = false;
@@ -87,6 +117,8 @@ export class FileHashManager {
       }
     }
 
+    this.loadTombstones();
+
     // 2. 尝试加载本地最新计算哈希缓存表 (hashMap)
     const loaded = this.loadFromStorage();
     let hasRestoredMap = false;
@@ -133,8 +165,24 @@ export class FileHashManager {
 
   private parseAndLoadSync(data: string): boolean {
     try {
-      const parsed = JSON.parse(data) as Record<string, string>;
-      this.syncHashMap = new Map(Object.entries(parsed));
+      const parsed = JSON.parse(data) as Record<string, string | [string, string?, number?] | { hash: string; sha?: string; rev?: number }>;
+      this.syncHashMap = new Map();
+      this.shaMap = new Map();
+      this.revMap = new Map();
+      for (const [path, v] of Object.entries(parsed)) {
+        if (typeof v === "string") {
+          this.syncHashMap.set(path, v);
+        } else if (Array.isArray(v)) {
+          // 紧凑格式 [hash, shaBase64, rev]
+          this.syncHashMap.set(path, v[0]);
+          if (v[1]) this.shaMap.set(path, v[1]); // 内存里也存 base64，落盘零转换
+          if (v[2]) this.revMap.set(path, v[2]);
+        } else {
+          this.syncHashMap.set(path, v.hash);
+          if (v.sha) this.shaMap.set(path, hexToB64(v.sha));
+          if (v.rev) this.revMap.set(path, v.rev);
+        }
+      }
       return true;
     } catch (error) {
       dump("FileHashManager: 解析同步基准哈希数据失败", error);
@@ -264,6 +312,73 @@ export class FileHashManager {
     return this.syncHashMap.get(path) || null;
   }
 
+  /** serverMerge：base 正文 sha256（可能为 null） */
+  getPathSha(path: string): string | null {
+    const b = this.shaMap.get(path);
+    return b === undefined ? null : b64ToHex(b);
+  }
+
+  /** serverMerge：已知的服务端 rev（0 = 未知） */
+  getPathRev(path: string): number {
+    return Math.max(this.revMap.get(path) ?? 0, this.tombMap.get(path) ?? 0, this.reconcileTombs?.get(path) ?? 0);
+  }
+
+  /** 跨广播通道的迟到消息下界；可信分页有自己的精确路径门控。 */
+  getReplayFloor(path?: string): number {
+    const unknown = path === undefined || (!this.syncHashMap.has(path) && this.getPathRev(path) === 0);
+    return Math.max(this.reconcileFloor, unknown ? this.tombFloor : 0);
+  }
+
+  beginReconcile(): void { this.reconcileTombs = new Map(this.tombMap); }
+  endReconcile(): void { this.reconcileTombs = null; }
+
+  /**
+   * serverMerge：只更新同步 base（hash/sha/rev），不碰本地内容缓存 hashMap。
+   * 用于无法确认本地正文 == base 的场合，避免把旧正文 hash 绑到新编辑文件的 mtime/size 上。
+   */
+  setSyncBase(path: string, hash: string, rev?: number, sha?: string): void {
+    this.syncHashMap.set(path, hash);
+    if (sha) this.shaMap.set(path, hexToB64(sha));
+    else this.shaMap.delete(path);
+    if (rev !== undefined && rev > 0) {
+      this.revMap.set(path, rev);
+      this.tombMap.delete(path);
+    }
+    this.scheduleSave();
+  }
+
+  private addTombstone(path: string, rev: number): void {
+    const cur = this.tombMap.get(path) ?? 0;
+    this.tombMap.delete(path); // 重新插入 = 最近
+    this.tombMap.set(path, Math.max(cur, rev));
+    if (this.reconcileTombs) this.reconcileTombs.set(path, Math.max(this.reconcileTombs.get(path) ?? 0, rev));
+    while (this.tombMap.size > MAX_TOMBSTONES) {
+      const oldest = this.tombMap.keys().next().value as string;
+      this.tombFloor = Math.max(this.tombFloor, this.tombMap.get(oldest) ?? 0);
+      this.tombMap.delete(oldest);
+    }
+  }
+
+  /**
+   * 全量分页完成允许回收旧路径墓碑，但不代表各广播通道已排空。
+   * 持久保留同一水位，让迟到广播继续被拒绝；后续可信分页可绕过此全局水位。
+   */
+  collectTombstones(barrierRev: number): void {
+    if (!(barrierRev > 0)) return;
+    let changed = false;
+    for (const [path, rev] of this.tombMap) {
+      if (rev <= barrierRev) {
+        this.tombMap.delete(path);
+        changed = true;
+      }
+    }
+    if (barrierRev > this.reconcileFloor) {
+      this.reconcileFloor = barrierRev;
+      changed = true;
+    }
+    if (changed) this.scheduleSave();
+  }
+
   /**
    * 获取已成功同步的所有文件路径 (用于检测离线删除与拉取缺失文件)
    */
@@ -274,8 +389,15 @@ export class FileHashManager {
   /**
    * 添加或更新单个文件的对齐基准哈希值 (在 Ack 确认或收到推送时调用)
    */
-  setFileHash(path: string, hash: string, mtime: number = 0, size: number = 0): void {
+  setFileHash(path: string, hash: string, mtime: number = 0, size: number = 0, rev?: number, sha?: string): void {
     this.hashMap.set(path, { hash, mtime, size });
+    // hash 变了而没给新 sha：旧 sha 已失效
+    if (sha) this.shaMap.set(path, hexToB64(sha));
+    else if (this.syncHashMap.get(path) !== hash) this.shaMap.delete(path);
+    if (rev !== undefined && rev > 0) {
+      this.revMap.set(path, rev);
+      this.tombMap.delete(path); // 新建成功（rev 高于墓碑）清除墓碑
+    }
     this.syncHashMap.set(path, hash);
     this.scheduleSave();
   }
@@ -297,10 +419,13 @@ export class FileHashManager {
   /**
    * 删除指定路径的哈希
    */
-  removeFileHash(path: string): void {
+  removeFileHash(path: string, tombstoneRev?: number): void {
     const deleted1 = this.hashMap.delete(path);
     const deleted2 = this.syncHashMap.delete(path);
-    if (deleted1 || deleted2) {
+    this.shaMap.delete(path);
+    this.revMap.delete(path);
+    if (tombstoneRev && tombstoneRev > 0) this.addTombstone(path, tombstoneRev);
+    if (deleted1 || deleted2 || tombstoneRev) {
       this.scheduleSave();
     }
   }
@@ -310,6 +435,8 @@ export class FileHashManager {
     for (const path of paths) {
       changed = this.hashMap.delete(path) || changed;
       changed = this.syncHashMap.delete(path) || changed;
+      this.shaMap.delete(path);
+      this.revMap.delete(path);
     }
     if (changed) this.scheduleSave();
   }
@@ -415,7 +542,12 @@ export class FileHashManager {
   private saveSyncToStorage(): void {
     let data: string;
     try {
-      const obj = Object.fromEntries(this.syncHashMap);
+      const obj: Record<string, string | [string, string, number]> = {};
+      for (const [path, hash] of this.syncHashMap) {
+        const sha = this.shaMap.get(path);
+        const rev = this.revMap.get(path);
+        obj[path] = sha || rev ? [hash, sha ?? "", rev ?? 0] : hash;
+      }
       data = JSON.stringify(obj);
     } catch (error) {
       dump("FileHashManager: 序列化同步基准哈希表失败", error);
@@ -429,6 +561,34 @@ export class FileHashManager {
     }
 
     this.syncMirror.scheduleWrite(data);
+
+    // 墓碑与 base 同时机落盘（条数封顶，体积很小）；为空且从未写过则不产生键
+    try {
+      if (this.tombMap.size > 0 || this.tombFloor > 0 || this.reconcileFloor > 0) {
+        this.plugin.app.saveLocalStorage(this.tombStorageKey, JSON.stringify({ f: this.tombFloor, b: this.reconcileFloor, t: Array.from(this.tombMap) }));
+        this.tombPersisted = true;
+      } else if (this.tombPersisted) {
+        this.plugin.app.saveLocalStorage(this.tombStorageKey, "{\"f\":0,\"b\":0,\"t\":[]}");
+        this.tombPersisted = false;
+      }
+    } catch (error) {
+      dump("FileHashManager: 保存墓碑失败", error);
+    }
+  }
+
+  private loadTombstones(): void {
+    try {
+      const raw = this.plugin.app.loadLocalStorage(this.tombStorageKey) as string | null;
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as [string, number][] | { f?: number; b?: number; t?: [string, number][] };
+      const list = Array.isArray(parsed) ? parsed : parsed.t ?? [];
+      this.tombMap = new Map(list);
+      this.tombFloor = Array.isArray(parsed) ? 0 : parsed.f ?? 0;
+      this.reconcileFloor = Array.isArray(parsed) ? 0 : parsed.b ?? 0;
+      this.tombPersisted = this.tombMap.size > 0 || this.tombFloor > 0 || this.reconcileFloor > 0;
+    } catch (error) {
+      dump("FileHashManager: 加载墓碑失败", error);
+    }
   }
 
   /**
@@ -456,6 +616,12 @@ export class FileHashManager {
   clearAll(): void {
     this.hashMap.clear();
     this.syncHashMap.clear();
+    this.shaMap.clear();
+    this.revMap.clear();
+    this.tombMap.clear();
+    this.tombFloor = 0;
+    this.reconcileFloor = 0;
+    this.endReconcile();
     this.saveToStorage();
   }
 
@@ -505,6 +671,8 @@ export class FileHashManager {
       if (isPathExcluded(path, this.plugin)) {
         this.hashMap.delete(path);
         this.syncHashMap.delete(path);
+        this.shaMap.delete(path);
+        this.revMap.delete(path);
         deletedCount++;
       }
     }

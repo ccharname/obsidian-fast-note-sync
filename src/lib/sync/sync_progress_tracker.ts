@@ -14,6 +14,7 @@ interface TypeProgress {
   
   // Overall page-driven tasks progress
   pageTaskTotal: number;       // Accumulated total items from all SyncPages / 从所有分页消息中累加的总项数
+  declaredTaskTotal: number | null; // SyncEnd 权威总数，独立于可调整的 UI 分母
   pageTaskCompleted: number;   // Processed items (completed, error, skipped) / 已处理的项数
   allPagesReceived: boolean;   // Has the last SyncPage (isLast: true) been received / 是否已收到最后一页
 
@@ -143,6 +144,7 @@ export class SyncProgressTracker {
       this.progressMap.set(type, {
         uploadComplete: false,
         pageTaskTotal: 0,
+        declaredTaskTotal: null,
         pageTaskCompleted: 0,
         allPagesReceived: false,
         receivedTaskTotal: 0,
@@ -367,6 +369,7 @@ export class SyncProgressTracker {
     const prog = this.progressMap.get(type);
     if (!prog) return;
     prog.pageTaskTotal = total;
+    prog.declaredTaskTotal = total;
     prog.expectedPages = total === 0 ? 0 : Math.ceil(total / syncDownChunkNum);
     this.notify();
   }
@@ -451,6 +454,16 @@ export class SyncProgressTracker {
     if (!this.activeTypes.has(type)) return true;
     const prog = this.progressMap.get(type);
     if (!prog) return true;
+    if (prog.declaredTaskTotal !== null && prog.receivedTaskTotal !== prog.declaredTaskTotal) return false;
+    // A final page alone cannot prove preceding pages arrived, even when a
+    // missing page is empty and the item count still matches SyncEnd.
+    if (prog.pages.size > 0) {
+      const lastPage = Array.from(prog.pages.entries()).find(([, page]) => page.isLast)?.[0];
+      if (lastPage === undefined || prog.pages.size !== lastPage + 1) return false;
+      for (let index = 0; index <= lastPage; index++) {
+        if (!prog.pages.has(index)) return false;
+      }
+    }
     // 使用实际收到的精准下载任务数加上传任务基数判定完成，防止提早判断导致清空 context
     // Negotiated paged transfers must complete every bucket; unrelated live
     // acknowledgements must not compensate for unfinished page items.

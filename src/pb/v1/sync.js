@@ -3678,6 +3678,9 @@ export const proto = $root.proto = (() => {
              * @property {boolean|null} [createOnly] NoteModifyOrCreateRequest createOnly
              * @property {string|null} [context] NoteModifyOrCreateRequest context
              * @property {boolean|null} [isConflictResolved] NoteModifyOrCreateRequest isConflictResolved
+             * @property {boolean|null} [serverMerge] NoteModifyOrCreateRequest serverMerge
+             * @property {string|null} [opId] NoteModifyOrCreateRequest opId
+             * @property {string|null} [baseSha] NoteModifyOrCreateRequest baseSha
              * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
@@ -3806,6 +3809,30 @@ export const proto = $root.proto = (() => {
             NoteModifyOrCreateRequest.prototype.isConflictResolved = false;
 
             /**
+             * NoteModifyOrCreateRequest serverMerge.
+             * @member {boolean} serverMerge
+             * @memberof proto.v1.NoteModifyOrCreateRequest
+             * @instance
+             */
+            NoteModifyOrCreateRequest.prototype.serverMerge = false;
+
+            /**
+             * NoteModifyOrCreateRequest opId.
+             * @member {string} opId
+             * @memberof proto.v1.NoteModifyOrCreateRequest
+             * @instance
+             */
+            NoteModifyOrCreateRequest.prototype.opId = "";
+
+            /**
+             * NoteModifyOrCreateRequest baseSha.
+             * @member {string} baseSha
+             * @memberof proto.v1.NoteModifyOrCreateRequest
+             * @instance
+             */
+            NoteModifyOrCreateRequest.prototype.baseSha = "";
+
+            /**
              * Creates a new NoteModifyOrCreateRequest instance using the specified properties.
              * @function create
              * @memberof proto.v1.NoteModifyOrCreateRequest
@@ -3861,6 +3888,12 @@ export const proto = $root.proto = (() => {
                     writer.uint32(/* id 11, wireType 2 =*/90).string(message.context);
                 if (message.isConflictResolved != null && $Object.hasOwnProperty.call(message, "isConflictResolved") && message.isConflictResolved !== false)
                     writer.uint32(/* id 12, wireType 0 =*/96).bool(message.isConflictResolved);
+                if (message.serverMerge != null && $Object.hasOwnProperty.call(message, "serverMerge") && message.serverMerge !== false)
+                    writer.uint32(/* id 13, wireType 0 =*/104).bool(message.serverMerge);
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId") && message.opId !== "")
+                    writer.uint32(/* id 14, wireType 2 =*/114).string(message.opId);
+                if (message.baseSha != null && $Object.hasOwnProperty.call(message, "baseSha") && message.baseSha !== "")
+                    writer.uint32(/* id 15, wireType 2 =*/122).string(message.baseSha);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
                         writer.raw(message.$unknowns[i]);
@@ -4016,6 +4049,33 @@ export const proto = $root.proto = (() => {
                                 delete message.isConflictResolved;
                             continue;
                         }
+                    case 13: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.bool())
+                                message.serverMerge = value;
+                            else
+                                delete message.serverMerge;
+                            continue;
+                        }
+                    case 14: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.opId = value;
+                            else
+                                delete message.opId;
+                            continue;
+                        }
+                    case 15: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.baseSha = value;
+                            else
+                                delete message.baseSha;
+                            continue;
+                        }
                     }
                     reader.skipType(wireType, _depth, tag);
                     if (!reader.discardUnknown) {
@@ -4095,6 +4155,15 @@ export const proto = $root.proto = (() => {
                 if (message.isConflictResolved != null && $Object.hasOwnProperty.call(message, "isConflictResolved"))
                     if (typeof message.isConflictResolved !== "boolean")
                         return "isConflictResolved: boolean expected";
+                if (message.serverMerge != null && $Object.hasOwnProperty.call(message, "serverMerge"))
+                    if (typeof message.serverMerge !== "boolean")
+                        return "serverMerge: boolean expected";
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    if (!$util.isString(message.opId))
+                        return "opId: string expected";
+                if (message.baseSha != null && $Object.hasOwnProperty.call(message, "baseSha"))
+                    if (!$util.isString(message.baseSha))
+                        return "baseSha: string expected";
                 return null;
             };
 
@@ -4166,6 +4235,15 @@ export const proto = $root.proto = (() => {
                 if (object.isConflictResolved != null)
                     if (object.isConflictResolved)
                         message.isConflictResolved = $Boolean(object.isConflictResolved);
+                if (object.serverMerge != null)
+                    if (object.serverMerge)
+                        message.serverMerge = $Boolean(object.serverMerge);
+                if (object.opId != null)
+                    if (typeof object.opId !== "string" || object.opId.length)
+                        message.opId = $String(object.opId);
+                if (object.baseSha != null)
+                    if (typeof object.baseSha !== "string" || object.baseSha.length)
+                        message.baseSha = $String(object.baseSha);
                 return message;
             };
 
@@ -4207,6 +4285,9 @@ export const proto = $root.proto = (() => {
                     object.createOnly = false;
                     object.context = "";
                     object.isConflictResolved = false;
+                    object.serverMerge = false;
+                    object.opId = "";
+                    object.baseSha = "";
                 }
                 if (message.vault != null && $Object.hasOwnProperty.call(message, "vault"))
                     object.vault = message.vault;
@@ -4242,6 +4323,12 @@ export const proto = $root.proto = (() => {
                     object.context = message.context;
                 if (message.isConflictResolved != null && $Object.hasOwnProperty.call(message, "isConflictResolved"))
                     object.isConflictResolved = message.isConflictResolved;
+                if (message.serverMerge != null && $Object.hasOwnProperty.call(message, "serverMerge"))
+                    object.serverMerge = message.serverMerge;
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    object.opId = message.opId;
+                if (message.baseSha != null && $Object.hasOwnProperty.call(message, "baseSha"))
+                    object.baseSha = message.baseSha;
                 return object;
             };
 
@@ -4720,6 +4807,9 @@ export const proto = $root.proto = (() => {
              * @property {string|null} [path] NoteDeleteRequest path
              * @property {string|null} [pathHash] NoteDeleteRequest pathHash
              * @property {string|null} [context] NoteDeleteRequest context
+             * @property {string|null} [baseSha] NoteDeleteRequest baseSha
+             * @property {string|null} [opId] NoteDeleteRequest opId
+             * @property {boolean|null} [serverMerge] NoteDeleteRequest serverMerge
              * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
@@ -4784,6 +4874,30 @@ export const proto = $root.proto = (() => {
             NoteDeleteRequest.prototype.context = "";
 
             /**
+             * NoteDeleteRequest baseSha.
+             * @member {string} baseSha
+             * @memberof proto.v1.NoteDeleteRequest
+             * @instance
+             */
+            NoteDeleteRequest.prototype.baseSha = "";
+
+            /**
+             * NoteDeleteRequest opId.
+             * @member {string} opId
+             * @memberof proto.v1.NoteDeleteRequest
+             * @instance
+             */
+            NoteDeleteRequest.prototype.opId = "";
+
+            /**
+             * NoteDeleteRequest serverMerge.
+             * @member {boolean} serverMerge
+             * @memberof proto.v1.NoteDeleteRequest
+             * @instance
+             */
+            NoteDeleteRequest.prototype.serverMerge = false;
+
+            /**
              * Creates a new NoteDeleteRequest instance using the specified properties.
              * @function create
              * @memberof proto.v1.NoteDeleteRequest
@@ -4823,6 +4937,12 @@ export const proto = $root.proto = (() => {
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.pathHash);
                 if (message.context != null && $Object.hasOwnProperty.call(message, "context") && message.context !== "")
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.context);
+                if (message.baseSha != null && $Object.hasOwnProperty.call(message, "baseSha") && message.baseSha !== "")
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.baseSha);
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId") && message.opId !== "")
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.opId);
+                if (message.serverMerge != null && $Object.hasOwnProperty.call(message, "serverMerge") && message.serverMerge !== false)
+                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.serverMerge);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
                         writer.raw(message.$unknowns[i]);
@@ -4906,6 +5026,33 @@ export const proto = $root.proto = (() => {
                                 delete message.context;
                             continue;
                         }
+                    case 5: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.baseSha = value;
+                            else
+                                delete message.baseSha;
+                            continue;
+                        }
+                    case 6: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.opId = value;
+                            else
+                                delete message.opId;
+                            continue;
+                        }
+                    case 7: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.bool())
+                                message.serverMerge = value;
+                            else
+                                delete message.serverMerge;
+                            continue;
+                        }
                     }
                     reader.skipType(wireType, _depth, tag);
                     if (!reader.discardUnknown) {
@@ -4961,6 +5108,15 @@ export const proto = $root.proto = (() => {
                 if (message.context != null && $Object.hasOwnProperty.call(message, "context"))
                     if (!$util.isString(message.context))
                         return "context: string expected";
+                if (message.baseSha != null && $Object.hasOwnProperty.call(message, "baseSha"))
+                    if (!$util.isString(message.baseSha))
+                        return "baseSha: string expected";
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    if (!$util.isString(message.opId))
+                        return "opId: string expected";
+                if (message.serverMerge != null && $Object.hasOwnProperty.call(message, "serverMerge"))
+                    if (typeof message.serverMerge !== "boolean")
+                        return "serverMerge: boolean expected";
                 return null;
             };
 
@@ -4994,6 +5150,15 @@ export const proto = $root.proto = (() => {
                 if (object.context != null)
                     if (typeof object.context !== "string" || object.context.length)
                         message.context = $String(object.context);
+                if (object.baseSha != null)
+                    if (typeof object.baseSha !== "string" || object.baseSha.length)
+                        message.baseSha = $String(object.baseSha);
+                if (object.opId != null)
+                    if (typeof object.opId !== "string" || object.opId.length)
+                        message.opId = $String(object.opId);
+                if (object.serverMerge != null)
+                    if (object.serverMerge)
+                        message.serverMerge = $Boolean(object.serverMerge);
                 return message;
             };
 
@@ -5019,6 +5184,9 @@ export const proto = $root.proto = (() => {
                     object.path = "";
                     object.pathHash = "";
                     object.context = "";
+                    object.baseSha = "";
+                    object.opId = "";
+                    object.serverMerge = false;
                 }
                 if (message.vault != null && $Object.hasOwnProperty.call(message, "vault"))
                     object.vault = message.vault;
@@ -5028,6 +5196,12 @@ export const proto = $root.proto = (() => {
                     object.pathHash = message.pathHash;
                 if (message.context != null && $Object.hasOwnProperty.call(message, "context"))
                     object.context = message.context;
+                if (message.baseSha != null && $Object.hasOwnProperty.call(message, "baseSha"))
+                    object.baseSha = message.baseSha;
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    object.opId = message.opId;
+                if (message.serverMerge != null && $Object.hasOwnProperty.call(message, "serverMerge"))
+                    object.serverMerge = message.serverMerge;
                 return object;
             };
 
@@ -5070,6 +5244,9 @@ export const proto = $root.proto = (() => {
              * @property {string|null} [oldPath] NoteRenameRequest oldPath
              * @property {string|null} [oldPathHash] NoteRenameRequest oldPathHash
              * @property {string|null} [context] NoteRenameRequest context
+             * @property {string|null} [baseSha] NoteRenameRequest baseSha
+             * @property {string|null} [opId] NoteRenameRequest opId
+             * @property {boolean|null} [serverMerge] NoteRenameRequest serverMerge
              * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
@@ -5150,6 +5327,30 @@ export const proto = $root.proto = (() => {
             NoteRenameRequest.prototype.context = "";
 
             /**
+             * NoteRenameRequest baseSha.
+             * @member {string} baseSha
+             * @memberof proto.v1.NoteRenameRequest
+             * @instance
+             */
+            NoteRenameRequest.prototype.baseSha = "";
+
+            /**
+             * NoteRenameRequest opId.
+             * @member {string} opId
+             * @memberof proto.v1.NoteRenameRequest
+             * @instance
+             */
+            NoteRenameRequest.prototype.opId = "";
+
+            /**
+             * NoteRenameRequest serverMerge.
+             * @member {boolean} serverMerge
+             * @memberof proto.v1.NoteRenameRequest
+             * @instance
+             */
+            NoteRenameRequest.prototype.serverMerge = false;
+
+            /**
              * Creates a new NoteRenameRequest instance using the specified properties.
              * @function create
              * @memberof proto.v1.NoteRenameRequest
@@ -5193,6 +5394,12 @@ export const proto = $root.proto = (() => {
                     writer.uint32(/* id 5, wireType 2 =*/42).string(message.oldPathHash);
                 if (message.context != null && $Object.hasOwnProperty.call(message, "context") && message.context !== "")
                     writer.uint32(/* id 6, wireType 2 =*/50).string(message.context);
+                if (message.baseSha != null && $Object.hasOwnProperty.call(message, "baseSha") && message.baseSha !== "")
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.baseSha);
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId") && message.opId !== "")
+                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.opId);
+                if (message.serverMerge != null && $Object.hasOwnProperty.call(message, "serverMerge") && message.serverMerge !== false)
+                    writer.uint32(/* id 9, wireType 0 =*/72).bool(message.serverMerge);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
                         writer.raw(message.$unknowns[i]);
@@ -5294,6 +5501,33 @@ export const proto = $root.proto = (() => {
                                 delete message.context;
                             continue;
                         }
+                    case 7: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.baseSha = value;
+                            else
+                                delete message.baseSha;
+                            continue;
+                        }
+                    case 8: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.opId = value;
+                            else
+                                delete message.opId;
+                            continue;
+                        }
+                    case 9: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.bool())
+                                message.serverMerge = value;
+                            else
+                                delete message.serverMerge;
+                            continue;
+                        }
                     }
                     reader.skipType(wireType, _depth, tag);
                     if (!reader.discardUnknown) {
@@ -5355,6 +5589,15 @@ export const proto = $root.proto = (() => {
                 if (message.context != null && $Object.hasOwnProperty.call(message, "context"))
                     if (!$util.isString(message.context))
                         return "context: string expected";
+                if (message.baseSha != null && $Object.hasOwnProperty.call(message, "baseSha"))
+                    if (!$util.isString(message.baseSha))
+                        return "baseSha: string expected";
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    if (!$util.isString(message.opId))
+                        return "opId: string expected";
+                if (message.serverMerge != null && $Object.hasOwnProperty.call(message, "serverMerge"))
+                    if (typeof message.serverMerge !== "boolean")
+                        return "serverMerge: boolean expected";
                 return null;
             };
 
@@ -5394,6 +5637,15 @@ export const proto = $root.proto = (() => {
                 if (object.context != null)
                     if (typeof object.context !== "string" || object.context.length)
                         message.context = $String(object.context);
+                if (object.baseSha != null)
+                    if (typeof object.baseSha !== "string" || object.baseSha.length)
+                        message.baseSha = $String(object.baseSha);
+                if (object.opId != null)
+                    if (typeof object.opId !== "string" || object.opId.length)
+                        message.opId = $String(object.opId);
+                if (object.serverMerge != null)
+                    if (object.serverMerge)
+                        message.serverMerge = $Boolean(object.serverMerge);
                 return message;
             };
 
@@ -5421,6 +5673,9 @@ export const proto = $root.proto = (() => {
                     object.oldPath = "";
                     object.oldPathHash = "";
                     object.context = "";
+                    object.baseSha = "";
+                    object.opId = "";
+                    object.serverMerge = false;
                 }
                 if (message.vault != null && $Object.hasOwnProperty.call(message, "vault"))
                     object.vault = message.vault;
@@ -5434,6 +5689,12 @@ export const proto = $root.proto = (() => {
                     object.oldPathHash = message.oldPathHash;
                 if (message.context != null && $Object.hasOwnProperty.call(message, "context"))
                     object.context = message.context;
+                if (message.baseSha != null && $Object.hasOwnProperty.call(message, "baseSha"))
+                    object.baseSha = message.baseSha;
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    object.opId = message.opId;
+                if (message.serverMerge != null && $Object.hasOwnProperty.call(message, "serverMerge"))
+                    object.serverMerge = message.serverMerge;
                 return object;
             };
 
@@ -5825,6 +6086,8 @@ export const proto = $root.proto = (() => {
              * @property {number|Long|null} [ctime] NoteSyncModifyMessage ctime
              * @property {number|Long|null} [mtime] NoteSyncModifyMessage mtime
              * @property {number|Long|null} [lastTime] NoteSyncModifyMessage lastTime
+             * @property {number|Long|null} [rev] NoteSyncModifyMessage rev
+             * @property {string|null} [sha] NoteSyncModifyMessage sha
              * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
@@ -5913,6 +6176,22 @@ export const proto = $root.proto = (() => {
             NoteSyncModifyMessage.prototype.lastTime = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
             /**
+             * NoteSyncModifyMessage rev.
+             * @member {number|Long} rev
+             * @memberof proto.v1.NoteSyncModifyMessage
+             * @instance
+             */
+            NoteSyncModifyMessage.prototype.rev = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+            /**
+             * NoteSyncModifyMessage sha.
+             * @member {string} sha
+             * @memberof proto.v1.NoteSyncModifyMessage
+             * @instance
+             */
+            NoteSyncModifyMessage.prototype.sha = "";
+
+            /**
              * Creates a new NoteSyncModifyMessage instance using the specified properties.
              * @function create
              * @memberof proto.v1.NoteSyncModifyMessage
@@ -5958,6 +6237,10 @@ export const proto = $root.proto = (() => {
                     writer.uint32(/* id 6, wireType 0 =*/48).int64(message.mtime);
                 if (message.lastTime != null && $Object.hasOwnProperty.call(message, "lastTime") && (typeof message.lastTime === "object" ? message.lastTime.low || message.lastTime.high : message.lastTime !== 0))
                     writer.uint32(/* id 7, wireType 0 =*/56).int64(message.lastTime);
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev") && (typeof message.rev === "object" ? message.rev.low || message.rev.high : message.rev !== 0))
+                    writer.uint32(/* id 8, wireType 0 =*/64).int64(message.rev);
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha") && message.sha !== "")
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.sha);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
                         writer.raw(message.$unknowns[i]);
@@ -6068,6 +6351,24 @@ export const proto = $root.proto = (() => {
                                 delete message.lastTime;
                             continue;
                         }
+                    case 8: {
+                            if (wireType !== 0)
+                                break;
+                            if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                                message.rev = value;
+                            else
+                                delete message.rev;
+                            continue;
+                        }
+                    case 9: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.sha = value;
+                            else
+                                delete message.sha;
+                            continue;
+                        }
                     }
                     reader.skipType(wireType, _depth, tag);
                     if (!reader.discardUnknown) {
@@ -6132,6 +6433,12 @@ export const proto = $root.proto = (() => {
                 if (message.lastTime != null && $Object.hasOwnProperty.call(message, "lastTime"))
                     if (!$util.isInteger(message.lastTime) && !(message.lastTime && $util.isInteger(message.lastTime.low) && $util.isInteger(message.lastTime.high)))
                         return "lastTime: integer|Long expected";
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (!$util.isInteger(message.rev) && !(message.rev && $util.isInteger(message.rev.low) && $util.isInteger(message.rev.high)))
+                        return "rev: integer|Long expected";
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha"))
+                    if (!$util.isString(message.sha))
+                        return "sha: string expected";
                 return null;
             };
 
@@ -6195,6 +6502,19 @@ export const proto = $root.proto = (() => {
                             message.lastTime = object.lastTime;
                         else if (typeof object.lastTime === "object")
                             message.lastTime = new $util.LongBits(object.lastTime.low >>> 0, object.lastTime.high >>> 0).toNumber();
+                if (object.rev != null)
+                    if (typeof object.rev === "object" ? object.rev.low || object.rev.high : $Number(object.rev) !== 0)
+                        if ($util.Long)
+                            message.rev = $util.Long.fromValue(object.rev, false);
+                        else if (typeof object.rev === "string")
+                            message.rev = $parseInt(object.rev, 10);
+                        else if (typeof object.rev === "number")
+                            message.rev = object.rev;
+                        else if (typeof object.rev === "object")
+                            message.rev = new $util.LongBits(object.rev.low >>> 0, object.rev.high >>> 0).toNumber();
+                if (object.sha != null)
+                    if (typeof object.sha !== "string" || object.sha.length)
+                        message.sha = $String(object.sha);
                 return message;
             };
 
@@ -6235,6 +6555,12 @@ export const proto = $root.proto = (() => {
                         object.lastTime = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                     } else
                         object.lastTime = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                    if ($util.Long) {
+                        let long = new $util.Long(0, 0, false);
+                        object.rev = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                    } else
+                        object.rev = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                    object.sha = "";
                 }
                 if (message.path != null && $Object.hasOwnProperty.call(message, "path"))
                     object.path = message.path;
@@ -6265,6 +6591,15 @@ export const proto = $root.proto = (() => {
                         object.lastTime = options.longs === $String ? $String(message.lastTime) : message.lastTime;
                     else
                         object.lastTime = options.longs === $String ? $util.Long.prototype.toString.call(message.lastTime) : options.longs === $Number ? new $util.LongBits(message.lastTime.low >>> 0, message.lastTime.high >>> 0).toNumber() : message.lastTime;
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                        object.rev = typeof message.rev === "number" ? $BigInt(message.rev) : $util.Long.fromBits(message.rev.low >>> 0, message.rev.high >>> 0, false).toBigInt();
+                    else if (typeof message.rev === "number")
+                        object.rev = options.longs === $String ? $String(message.rev) : message.rev;
+                    else
+                        object.rev = options.longs === $String ? $util.Long.prototype.toString.call(message.rev) : options.longs === $Number ? new $util.LongBits(message.rev.low >>> 0, message.rev.high >>> 0).toNumber() : message.rev;
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha"))
+                    object.sha = message.sha;
                 return object;
             };
 
@@ -6307,6 +6642,7 @@ export const proto = $root.proto = (() => {
              * @property {number|Long|null} [mtime] NoteSyncDeleteMessage mtime
              * @property {number|Long|null} [size] NoteSyncDeleteMessage size
              * @property {number|Long|null} [lastTime] NoteSyncDeleteMessage lastTime
+             * @property {number|Long|null} [rev] NoteSyncDeleteMessage rev
              * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
@@ -6387,6 +6723,14 @@ export const proto = $root.proto = (() => {
             NoteSyncDeleteMessage.prototype.lastTime = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
             /**
+             * NoteSyncDeleteMessage rev.
+             * @member {number|Long} rev
+             * @memberof proto.v1.NoteSyncDeleteMessage
+             * @instance
+             */
+            NoteSyncDeleteMessage.prototype.rev = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+            /**
              * Creates a new NoteSyncDeleteMessage instance using the specified properties.
              * @function create
              * @memberof proto.v1.NoteSyncDeleteMessage
@@ -6430,6 +6774,8 @@ export const proto = $root.proto = (() => {
                     writer.uint32(/* id 5, wireType 0 =*/40).int64(message.size);
                 if (message.lastTime != null && $Object.hasOwnProperty.call(message, "lastTime") && (typeof message.lastTime === "object" ? message.lastTime.low || message.lastTime.high : message.lastTime !== 0))
                     writer.uint32(/* id 6, wireType 0 =*/48).int64(message.lastTime);
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev") && (typeof message.rev === "object" ? message.rev.low || message.rev.high : message.rev !== 0))
+                    writer.uint32(/* id 7, wireType 0 =*/56).int64(message.rev);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
                         writer.raw(message.$unknowns[i]);
@@ -6531,6 +6877,15 @@ export const proto = $root.proto = (() => {
                                 delete message.lastTime;
                             continue;
                         }
+                    case 7: {
+                            if (wireType !== 0)
+                                break;
+                            if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                                message.rev = value;
+                            else
+                                delete message.rev;
+                            continue;
+                        }
                     }
                     reader.skipType(wireType, _depth, tag);
                     if (!reader.discardUnknown) {
@@ -6592,6 +6947,9 @@ export const proto = $root.proto = (() => {
                 if (message.lastTime != null && $Object.hasOwnProperty.call(message, "lastTime"))
                     if (!$util.isInteger(message.lastTime) && !(message.lastTime && $util.isInteger(message.lastTime.low) && $util.isInteger(message.lastTime.high)))
                         return "lastTime: integer|Long expected";
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (!$util.isInteger(message.rev) && !(message.rev && $util.isInteger(message.rev.low) && $util.isInteger(message.rev.high)))
+                        return "rev: integer|Long expected";
                 return null;
             };
 
@@ -6659,6 +7017,16 @@ export const proto = $root.proto = (() => {
                             message.lastTime = object.lastTime;
                         else if (typeof object.lastTime === "object")
                             message.lastTime = new $util.LongBits(object.lastTime.low >>> 0, object.lastTime.high >>> 0).toNumber();
+                if (object.rev != null)
+                    if (typeof object.rev === "object" ? object.rev.low || object.rev.high : $Number(object.rev) !== 0)
+                        if ($util.Long)
+                            message.rev = $util.Long.fromValue(object.rev, false);
+                        else if (typeof object.rev === "string")
+                            message.rev = $parseInt(object.rev, 10);
+                        else if (typeof object.rev === "number")
+                            message.rev = object.rev;
+                        else if (typeof object.rev === "object")
+                            message.rev = new $util.LongBits(object.rev.low >>> 0, object.rev.high >>> 0).toNumber();
                 return message;
             };
 
@@ -6702,6 +7070,11 @@ export const proto = $root.proto = (() => {
                         object.lastTime = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                     } else
                         object.lastTime = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                    if ($util.Long) {
+                        let long = new $util.Long(0, 0, false);
+                        object.rev = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                    } else
+                        object.rev = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                 }
                 if (message.path != null && $Object.hasOwnProperty.call(message, "path"))
                     object.path = message.path;
@@ -6735,6 +7108,13 @@ export const proto = $root.proto = (() => {
                         object.lastTime = options.longs === $String ? $String(message.lastTime) : message.lastTime;
                     else
                         object.lastTime = options.longs === $String ? $util.Long.prototype.toString.call(message.lastTime) : options.longs === $Number ? new $util.LongBits(message.lastTime.low >>> 0, message.lastTime.high >>> 0).toNumber() : message.lastTime;
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                        object.rev = typeof message.rev === "number" ? $BigInt(message.rev) : $util.Long.fromBits(message.rev.low >>> 0, message.rev.high >>> 0, false).toBigInt();
+                    else if (typeof message.rev === "number")
+                        object.rev = options.longs === $String ? $String(message.rev) : message.rev;
+                    else
+                        object.rev = options.longs === $String ? $util.Long.prototype.toString.call(message.rev) : options.longs === $Number ? new $util.LongBits(message.rev.low >>> 0, message.rev.high >>> 0).toNumber() : message.rev;
                 return object;
             };
 
@@ -6780,6 +7160,8 @@ export const proto = $root.proto = (() => {
              * @property {string|null} [oldPath] NoteSyncRenameMessage oldPath
              * @property {string|null} [oldPathHash] NoteSyncRenameMessage oldPathHash
              * @property {number|Long|null} [lastTime] NoteSyncRenameMessage lastTime
+             * @property {number|Long|null} [rev] NoteSyncRenameMessage rev
+             * @property {string|null} [sha] NoteSyncRenameMessage sha
              * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
@@ -6884,6 +7266,22 @@ export const proto = $root.proto = (() => {
             NoteSyncRenameMessage.prototype.lastTime = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
             /**
+             * NoteSyncRenameMessage rev.
+             * @member {number|Long} rev
+             * @memberof proto.v1.NoteSyncRenameMessage
+             * @instance
+             */
+            NoteSyncRenameMessage.prototype.rev = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+            /**
+             * NoteSyncRenameMessage sha.
+             * @member {string} sha
+             * @memberof proto.v1.NoteSyncRenameMessage
+             * @instance
+             */
+            NoteSyncRenameMessage.prototype.sha = "";
+
+            /**
              * Creates a new NoteSyncRenameMessage instance using the specified properties.
              * @function create
              * @memberof proto.v1.NoteSyncRenameMessage
@@ -6933,6 +7331,10 @@ export const proto = $root.proto = (() => {
                     writer.uint32(/* id 8, wireType 2 =*/66).string(message.oldPathHash);
                 if (message.lastTime != null && $Object.hasOwnProperty.call(message, "lastTime") && (typeof message.lastTime === "object" ? message.lastTime.low || message.lastTime.high : message.lastTime !== 0))
                     writer.uint32(/* id 9, wireType 0 =*/72).int64(message.lastTime);
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev") && (typeof message.rev === "object" ? message.rev.low || message.rev.high : message.rev !== 0))
+                    writer.uint32(/* id 10, wireType 0 =*/80).int64(message.rev);
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha") && message.sha !== "")
+                    writer.uint32(/* id 11, wireType 2 =*/90).string(message.sha);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
                         writer.raw(message.$unknowns[i]);
@@ -7061,6 +7463,24 @@ export const proto = $root.proto = (() => {
                                 delete message.lastTime;
                             continue;
                         }
+                    case 10: {
+                            if (wireType !== 0)
+                                break;
+                            if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                                message.rev = value;
+                            else
+                                delete message.rev;
+                            continue;
+                        }
+                    case 11: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.sha = value;
+                            else
+                                delete message.sha;
+                            continue;
+                        }
                     }
                     reader.skipType(wireType, _depth, tag);
                     if (!reader.discardUnknown) {
@@ -7131,6 +7551,12 @@ export const proto = $root.proto = (() => {
                 if (message.lastTime != null && $Object.hasOwnProperty.call(message, "lastTime"))
                     if (!$util.isInteger(message.lastTime) && !(message.lastTime && $util.isInteger(message.lastTime.low) && $util.isInteger(message.lastTime.high)))
                         return "lastTime: integer|Long expected";
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (!$util.isInteger(message.rev) && !(message.rev && $util.isInteger(message.rev.low) && $util.isInteger(message.rev.high)))
+                        return "rev: integer|Long expected";
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha"))
+                    if (!$util.isString(message.sha))
+                        return "sha: string expected";
                 return null;
             };
 
@@ -7207,6 +7633,19 @@ export const proto = $root.proto = (() => {
                             message.lastTime = object.lastTime;
                         else if (typeof object.lastTime === "object")
                             message.lastTime = new $util.LongBits(object.lastTime.low >>> 0, object.lastTime.high >>> 0).toNumber();
+                if (object.rev != null)
+                    if (typeof object.rev === "object" ? object.rev.low || object.rev.high : $Number(object.rev) !== 0)
+                        if ($util.Long)
+                            message.rev = $util.Long.fromValue(object.rev, false);
+                        else if (typeof object.rev === "string")
+                            message.rev = $parseInt(object.rev, 10);
+                        else if (typeof object.rev === "number")
+                            message.rev = object.rev;
+                        else if (typeof object.rev === "object")
+                            message.rev = new $util.LongBits(object.rev.low >>> 0, object.rev.high >>> 0).toNumber();
+                if (object.sha != null)
+                    if (typeof object.sha !== "string" || object.sha.length)
+                        message.sha = $String(object.sha);
                 return message;
             };
 
@@ -7253,6 +7692,12 @@ export const proto = $root.proto = (() => {
                         object.lastTime = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                     } else
                         object.lastTime = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                    if ($util.Long) {
+                        let long = new $util.Long(0, 0, false);
+                        object.rev = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                    } else
+                        object.rev = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                    object.sha = "";
                 }
                 if (message.path != null && $Object.hasOwnProperty.call(message, "path"))
                     object.path = message.path;
@@ -7292,6 +7737,15 @@ export const proto = $root.proto = (() => {
                         object.lastTime = options.longs === $String ? $String(message.lastTime) : message.lastTime;
                     else
                         object.lastTime = options.longs === $String ? $util.Long.prototype.toString.call(message.lastTime) : options.longs === $Number ? new $util.LongBits(message.lastTime.low >>> 0, message.lastTime.high >>> 0).toNumber() : message.lastTime;
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                        object.rev = typeof message.rev === "number" ? $BigInt(message.rev) : $util.Long.fromBits(message.rev.low >>> 0, message.rev.high >>> 0, false).toBigInt();
+                    else if (typeof message.rev === "number")
+                        object.rev = options.longs === $String ? $String(message.rev) : message.rev;
+                    else
+                        object.rev = options.longs === $String ? $util.Long.prototype.toString.call(message.rev) : options.longs === $Number ? new $util.LongBits(message.rev.low >>> 0, message.rev.high >>> 0).toNumber() : message.rev;
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha"))
+                    object.sha = message.sha;
                 return object;
             };
 
@@ -8561,6 +9015,14 @@ export const proto = $root.proto = (() => {
              * @property {number|Long|null} [lastTime] NoteModifyAckMessage lastTime
              * @property {string|null} [path] NoteModifyAckMessage path
              * @property {string|null} [pathHash] NoteModifyAckMessage pathHash
+             * @property {string|null} [opId] NoteModifyAckMessage opId
+             * @property {number|Long|null} [rev] NoteModifyAckMessage rev
+             * @property {string|null} [sha] NoteModifyAckMessage sha
+             * @property {boolean|null} [merged] NoteModifyAckMessage merged
+             * @property {string|null} [content] NoteModifyAckMessage content
+             * @property {string|null} [conflictCopy] NoteModifyAckMessage conflictCopy
+             * @property {boolean|null} [rejected] NoteModifyAckMessage rejected
+             * @property {string|null} [rejectReason] NoteModifyAckMessage rejectReason
              * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
@@ -8617,6 +9079,70 @@ export const proto = $root.proto = (() => {
             NoteModifyAckMessage.prototype.pathHash = "";
 
             /**
+             * NoteModifyAckMessage opId.
+             * @member {string} opId
+             * @memberof proto.v1.NoteModifyAckMessage
+             * @instance
+             */
+            NoteModifyAckMessage.prototype.opId = "";
+
+            /**
+             * NoteModifyAckMessage rev.
+             * @member {number|Long} rev
+             * @memberof proto.v1.NoteModifyAckMessage
+             * @instance
+             */
+            NoteModifyAckMessage.prototype.rev = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+            /**
+             * NoteModifyAckMessage sha.
+             * @member {string} sha
+             * @memberof proto.v1.NoteModifyAckMessage
+             * @instance
+             */
+            NoteModifyAckMessage.prototype.sha = "";
+
+            /**
+             * NoteModifyAckMessage merged.
+             * @member {boolean} merged
+             * @memberof proto.v1.NoteModifyAckMessage
+             * @instance
+             */
+            NoteModifyAckMessage.prototype.merged = false;
+
+            /**
+             * NoteModifyAckMessage content.
+             * @member {string} content
+             * @memberof proto.v1.NoteModifyAckMessage
+             * @instance
+             */
+            NoteModifyAckMessage.prototype.content = "";
+
+            /**
+             * NoteModifyAckMessage conflictCopy.
+             * @member {string} conflictCopy
+             * @memberof proto.v1.NoteModifyAckMessage
+             * @instance
+             */
+            NoteModifyAckMessage.prototype.conflictCopy = "";
+
+            /**
+             * NoteModifyAckMessage rejected.
+             * @member {boolean} rejected
+             * @memberof proto.v1.NoteModifyAckMessage
+             * @instance
+             */
+            NoteModifyAckMessage.prototype.rejected = false;
+
+            /**
+             * NoteModifyAckMessage rejectReason.
+             * @member {string} rejectReason
+             * @memberof proto.v1.NoteModifyAckMessage
+             * @instance
+             */
+            NoteModifyAckMessage.prototype.rejectReason = "";
+
+            /**
              * Creates a new NoteModifyAckMessage instance using the specified properties.
              * @function create
              * @memberof proto.v1.NoteModifyAckMessage
@@ -8654,6 +9180,22 @@ export const proto = $root.proto = (() => {
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.path);
                 if (message.pathHash != null && $Object.hasOwnProperty.call(message, "pathHash") && message.pathHash !== "")
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.pathHash);
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId") && message.opId !== "")
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.opId);
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev") && (typeof message.rev === "object" ? message.rev.low || message.rev.high : message.rev !== 0))
+                    writer.uint32(/* id 5, wireType 0 =*/40).int64(message.rev);
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha") && message.sha !== "")
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.sha);
+                if (message.merged != null && $Object.hasOwnProperty.call(message, "merged") && message.merged !== false)
+                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.merged);
+                if (message.content != null && $Object.hasOwnProperty.call(message, "content") && message.content !== "")
+                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.content);
+                if (message.conflictCopy != null && $Object.hasOwnProperty.call(message, "conflictCopy") && message.conflictCopy !== "")
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.conflictCopy);
+                if (message.rejected != null && $Object.hasOwnProperty.call(message, "rejected") && message.rejected !== false)
+                    writer.uint32(/* id 10, wireType 0 =*/80).bool(message.rejected);
+                if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason") && message.rejectReason !== "")
+                    writer.uint32(/* id 11, wireType 2 =*/90).string(message.rejectReason);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
                         writer.raw(message.$unknowns[i]);
@@ -8728,6 +9270,78 @@ export const proto = $root.proto = (() => {
                                 delete message.pathHash;
                             continue;
                         }
+                    case 4: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.opId = value;
+                            else
+                                delete message.opId;
+                            continue;
+                        }
+                    case 5: {
+                            if (wireType !== 0)
+                                break;
+                            if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                                message.rev = value;
+                            else
+                                delete message.rev;
+                            continue;
+                        }
+                    case 6: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.sha = value;
+                            else
+                                delete message.sha;
+                            continue;
+                        }
+                    case 7: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.bool())
+                                message.merged = value;
+                            else
+                                delete message.merged;
+                            continue;
+                        }
+                    case 8: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.content = value;
+                            else
+                                delete message.content;
+                            continue;
+                        }
+                    case 9: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.conflictCopy = value;
+                            else
+                                delete message.conflictCopy;
+                            continue;
+                        }
+                    case 10: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.bool())
+                                message.rejected = value;
+                            else
+                                delete message.rejected;
+                            continue;
+                        }
+                    case 11: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.rejectReason = value;
+                            else
+                                delete message.rejectReason;
+                            continue;
+                        }
                     }
                     reader.skipType(wireType, _depth, tag);
                     if (!reader.discardUnknown) {
@@ -8780,6 +9394,30 @@ export const proto = $root.proto = (() => {
                 if (message.pathHash != null && $Object.hasOwnProperty.call(message, "pathHash"))
                     if (!$util.isString(message.pathHash))
                         return "pathHash: string expected";
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    if (!$util.isString(message.opId))
+                        return "opId: string expected";
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (!$util.isInteger(message.rev) && !(message.rev && $util.isInteger(message.rev.low) && $util.isInteger(message.rev.high)))
+                        return "rev: integer|Long expected";
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha"))
+                    if (!$util.isString(message.sha))
+                        return "sha: string expected";
+                if (message.merged != null && $Object.hasOwnProperty.call(message, "merged"))
+                    if (typeof message.merged !== "boolean")
+                        return "merged: boolean expected";
+                if (message.content != null && $Object.hasOwnProperty.call(message, "content"))
+                    if (!$util.isString(message.content))
+                        return "content: string expected";
+                if (message.conflictCopy != null && $Object.hasOwnProperty.call(message, "conflictCopy"))
+                    if (!$util.isString(message.conflictCopy))
+                        return "conflictCopy: string expected";
+                if (message.rejected != null && $Object.hasOwnProperty.call(message, "rejected"))
+                    if (typeof message.rejected !== "boolean")
+                        return "rejected: boolean expected";
+                if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
+                    if (!$util.isString(message.rejectReason))
+                        return "rejectReason: string expected";
                 return null;
             };
 
@@ -8817,6 +9455,37 @@ export const proto = $root.proto = (() => {
                 if (object.pathHash != null)
                     if (typeof object.pathHash !== "string" || object.pathHash.length)
                         message.pathHash = $String(object.pathHash);
+                if (object.opId != null)
+                    if (typeof object.opId !== "string" || object.opId.length)
+                        message.opId = $String(object.opId);
+                if (object.rev != null)
+                    if (typeof object.rev === "object" ? object.rev.low || object.rev.high : $Number(object.rev) !== 0)
+                        if ($util.Long)
+                            message.rev = $util.Long.fromValue(object.rev, false);
+                        else if (typeof object.rev === "string")
+                            message.rev = $parseInt(object.rev, 10);
+                        else if (typeof object.rev === "number")
+                            message.rev = object.rev;
+                        else if (typeof object.rev === "object")
+                            message.rev = new $util.LongBits(object.rev.low >>> 0, object.rev.high >>> 0).toNumber();
+                if (object.sha != null)
+                    if (typeof object.sha !== "string" || object.sha.length)
+                        message.sha = $String(object.sha);
+                if (object.merged != null)
+                    if (object.merged)
+                        message.merged = $Boolean(object.merged);
+                if (object.content != null)
+                    if (typeof object.content !== "string" || object.content.length)
+                        message.content = $String(object.content);
+                if (object.conflictCopy != null)
+                    if (typeof object.conflictCopy !== "string" || object.conflictCopy.length)
+                        message.conflictCopy = $String(object.conflictCopy);
+                if (object.rejected != null)
+                    if (object.rejected)
+                        message.rejected = $Boolean(object.rejected);
+                if (object.rejectReason != null)
+                    if (typeof object.rejectReason !== "string" || object.rejectReason.length)
+                        message.rejectReason = $String(object.rejectReason);
                 return message;
             };
 
@@ -8845,6 +9514,18 @@ export const proto = $root.proto = (() => {
                         object.lastTime = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                     object.path = "";
                     object.pathHash = "";
+                    object.opId = "";
+                    if ($util.Long) {
+                        let long = new $util.Long(0, 0, false);
+                        object.rev = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                    } else
+                        object.rev = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                    object.sha = "";
+                    object.merged = false;
+                    object.content = "";
+                    object.conflictCopy = "";
+                    object.rejected = false;
+                    object.rejectReason = "";
                 }
                 if (message.lastTime != null && $Object.hasOwnProperty.call(message, "lastTime"))
                     if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
@@ -8857,6 +9538,27 @@ export const proto = $root.proto = (() => {
                     object.path = message.path;
                 if (message.pathHash != null && $Object.hasOwnProperty.call(message, "pathHash"))
                     object.pathHash = message.pathHash;
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    object.opId = message.opId;
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                        object.rev = typeof message.rev === "number" ? $BigInt(message.rev) : $util.Long.fromBits(message.rev.low >>> 0, message.rev.high >>> 0, false).toBigInt();
+                    else if (typeof message.rev === "number")
+                        object.rev = options.longs === $String ? $String(message.rev) : message.rev;
+                    else
+                        object.rev = options.longs === $String ? $util.Long.prototype.toString.call(message.rev) : options.longs === $Number ? new $util.LongBits(message.rev.low >>> 0, message.rev.high >>> 0).toNumber() : message.rev;
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha"))
+                    object.sha = message.sha;
+                if (message.merged != null && $Object.hasOwnProperty.call(message, "merged"))
+                    object.merged = message.merged;
+                if (message.content != null && $Object.hasOwnProperty.call(message, "content"))
+                    object.content = message.content;
+                if (message.conflictCopy != null && $Object.hasOwnProperty.call(message, "conflictCopy"))
+                    object.conflictCopy = message.conflictCopy;
+                if (message.rejected != null && $Object.hasOwnProperty.call(message, "rejected"))
+                    object.rejected = message.rejected;
+                if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
+                    object.rejectReason = message.rejectReason;
                 return object;
             };
 
@@ -8896,6 +9598,14 @@ export const proto = $root.proto = (() => {
              * @property {number|Long|null} [lastTime] NoteRenameAckMessage lastTime
              * @property {string|null} [path] NoteRenameAckMessage path
              * @property {string|null} [pathHash] NoteRenameAckMessage pathHash
+             * @property {string|null} [opId] NoteRenameAckMessage opId
+             * @property {number|Long|null} [rev] NoteRenameAckMessage rev
+             * @property {string|null} [sha] NoteRenameAckMessage sha
+             * @property {boolean|null} [merged] NoteRenameAckMessage merged
+             * @property {string|null} [content] NoteRenameAckMessage content
+             * @property {string|null} [conflictCopy] NoteRenameAckMessage conflictCopy
+             * @property {boolean|null} [rejected] NoteRenameAckMessage rejected
+             * @property {string|null} [rejectReason] NoteRenameAckMessage rejectReason
              * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
@@ -8952,6 +9662,70 @@ export const proto = $root.proto = (() => {
             NoteRenameAckMessage.prototype.pathHash = "";
 
             /**
+             * NoteRenameAckMessage opId.
+             * @member {string} opId
+             * @memberof proto.v1.NoteRenameAckMessage
+             * @instance
+             */
+            NoteRenameAckMessage.prototype.opId = "";
+
+            /**
+             * NoteRenameAckMessage rev.
+             * @member {number|Long} rev
+             * @memberof proto.v1.NoteRenameAckMessage
+             * @instance
+             */
+            NoteRenameAckMessage.prototype.rev = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+            /**
+             * NoteRenameAckMessage sha.
+             * @member {string} sha
+             * @memberof proto.v1.NoteRenameAckMessage
+             * @instance
+             */
+            NoteRenameAckMessage.prototype.sha = "";
+
+            /**
+             * NoteRenameAckMessage merged.
+             * @member {boolean} merged
+             * @memberof proto.v1.NoteRenameAckMessage
+             * @instance
+             */
+            NoteRenameAckMessage.prototype.merged = false;
+
+            /**
+             * NoteRenameAckMessage content.
+             * @member {string} content
+             * @memberof proto.v1.NoteRenameAckMessage
+             * @instance
+             */
+            NoteRenameAckMessage.prototype.content = "";
+
+            /**
+             * NoteRenameAckMessage conflictCopy.
+             * @member {string} conflictCopy
+             * @memberof proto.v1.NoteRenameAckMessage
+             * @instance
+             */
+            NoteRenameAckMessage.prototype.conflictCopy = "";
+
+            /**
+             * NoteRenameAckMessage rejected.
+             * @member {boolean} rejected
+             * @memberof proto.v1.NoteRenameAckMessage
+             * @instance
+             */
+            NoteRenameAckMessage.prototype.rejected = false;
+
+            /**
+             * NoteRenameAckMessage rejectReason.
+             * @member {string} rejectReason
+             * @memberof proto.v1.NoteRenameAckMessage
+             * @instance
+             */
+            NoteRenameAckMessage.prototype.rejectReason = "";
+
+            /**
              * Creates a new NoteRenameAckMessage instance using the specified properties.
              * @function create
              * @memberof proto.v1.NoteRenameAckMessage
@@ -8989,6 +9763,22 @@ export const proto = $root.proto = (() => {
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.path);
                 if (message.pathHash != null && $Object.hasOwnProperty.call(message, "pathHash") && message.pathHash !== "")
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.pathHash);
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId") && message.opId !== "")
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.opId);
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev") && (typeof message.rev === "object" ? message.rev.low || message.rev.high : message.rev !== 0))
+                    writer.uint32(/* id 5, wireType 0 =*/40).int64(message.rev);
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha") && message.sha !== "")
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.sha);
+                if (message.merged != null && $Object.hasOwnProperty.call(message, "merged") && message.merged !== false)
+                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.merged);
+                if (message.content != null && $Object.hasOwnProperty.call(message, "content") && message.content !== "")
+                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.content);
+                if (message.conflictCopy != null && $Object.hasOwnProperty.call(message, "conflictCopy") && message.conflictCopy !== "")
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.conflictCopy);
+                if (message.rejected != null && $Object.hasOwnProperty.call(message, "rejected") && message.rejected !== false)
+                    writer.uint32(/* id 10, wireType 0 =*/80).bool(message.rejected);
+                if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason") && message.rejectReason !== "")
+                    writer.uint32(/* id 11, wireType 2 =*/90).string(message.rejectReason);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
                         writer.raw(message.$unknowns[i]);
@@ -9063,6 +9853,78 @@ export const proto = $root.proto = (() => {
                                 delete message.pathHash;
                             continue;
                         }
+                    case 4: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.opId = value;
+                            else
+                                delete message.opId;
+                            continue;
+                        }
+                    case 5: {
+                            if (wireType !== 0)
+                                break;
+                            if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                                message.rev = value;
+                            else
+                                delete message.rev;
+                            continue;
+                        }
+                    case 6: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.sha = value;
+                            else
+                                delete message.sha;
+                            continue;
+                        }
+                    case 7: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.bool())
+                                message.merged = value;
+                            else
+                                delete message.merged;
+                            continue;
+                        }
+                    case 8: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.content = value;
+                            else
+                                delete message.content;
+                            continue;
+                        }
+                    case 9: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.conflictCopy = value;
+                            else
+                                delete message.conflictCopy;
+                            continue;
+                        }
+                    case 10: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.bool())
+                                message.rejected = value;
+                            else
+                                delete message.rejected;
+                            continue;
+                        }
+                    case 11: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.rejectReason = value;
+                            else
+                                delete message.rejectReason;
+                            continue;
+                        }
                     }
                     reader.skipType(wireType, _depth, tag);
                     if (!reader.discardUnknown) {
@@ -9115,6 +9977,30 @@ export const proto = $root.proto = (() => {
                 if (message.pathHash != null && $Object.hasOwnProperty.call(message, "pathHash"))
                     if (!$util.isString(message.pathHash))
                         return "pathHash: string expected";
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    if (!$util.isString(message.opId))
+                        return "opId: string expected";
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (!$util.isInteger(message.rev) && !(message.rev && $util.isInteger(message.rev.low) && $util.isInteger(message.rev.high)))
+                        return "rev: integer|Long expected";
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha"))
+                    if (!$util.isString(message.sha))
+                        return "sha: string expected";
+                if (message.merged != null && $Object.hasOwnProperty.call(message, "merged"))
+                    if (typeof message.merged !== "boolean")
+                        return "merged: boolean expected";
+                if (message.content != null && $Object.hasOwnProperty.call(message, "content"))
+                    if (!$util.isString(message.content))
+                        return "content: string expected";
+                if (message.conflictCopy != null && $Object.hasOwnProperty.call(message, "conflictCopy"))
+                    if (!$util.isString(message.conflictCopy))
+                        return "conflictCopy: string expected";
+                if (message.rejected != null && $Object.hasOwnProperty.call(message, "rejected"))
+                    if (typeof message.rejected !== "boolean")
+                        return "rejected: boolean expected";
+                if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
+                    if (!$util.isString(message.rejectReason))
+                        return "rejectReason: string expected";
                 return null;
             };
 
@@ -9152,6 +10038,37 @@ export const proto = $root.proto = (() => {
                 if (object.pathHash != null)
                     if (typeof object.pathHash !== "string" || object.pathHash.length)
                         message.pathHash = $String(object.pathHash);
+                if (object.opId != null)
+                    if (typeof object.opId !== "string" || object.opId.length)
+                        message.opId = $String(object.opId);
+                if (object.rev != null)
+                    if (typeof object.rev === "object" ? object.rev.low || object.rev.high : $Number(object.rev) !== 0)
+                        if ($util.Long)
+                            message.rev = $util.Long.fromValue(object.rev, false);
+                        else if (typeof object.rev === "string")
+                            message.rev = $parseInt(object.rev, 10);
+                        else if (typeof object.rev === "number")
+                            message.rev = object.rev;
+                        else if (typeof object.rev === "object")
+                            message.rev = new $util.LongBits(object.rev.low >>> 0, object.rev.high >>> 0).toNumber();
+                if (object.sha != null)
+                    if (typeof object.sha !== "string" || object.sha.length)
+                        message.sha = $String(object.sha);
+                if (object.merged != null)
+                    if (object.merged)
+                        message.merged = $Boolean(object.merged);
+                if (object.content != null)
+                    if (typeof object.content !== "string" || object.content.length)
+                        message.content = $String(object.content);
+                if (object.conflictCopy != null)
+                    if (typeof object.conflictCopy !== "string" || object.conflictCopy.length)
+                        message.conflictCopy = $String(object.conflictCopy);
+                if (object.rejected != null)
+                    if (object.rejected)
+                        message.rejected = $Boolean(object.rejected);
+                if (object.rejectReason != null)
+                    if (typeof object.rejectReason !== "string" || object.rejectReason.length)
+                        message.rejectReason = $String(object.rejectReason);
                 return message;
             };
 
@@ -9180,6 +10097,18 @@ export const proto = $root.proto = (() => {
                         object.lastTime = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                     object.path = "";
                     object.pathHash = "";
+                    object.opId = "";
+                    if ($util.Long) {
+                        let long = new $util.Long(0, 0, false);
+                        object.rev = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                    } else
+                        object.rev = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                    object.sha = "";
+                    object.merged = false;
+                    object.content = "";
+                    object.conflictCopy = "";
+                    object.rejected = false;
+                    object.rejectReason = "";
                 }
                 if (message.lastTime != null && $Object.hasOwnProperty.call(message, "lastTime"))
                     if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
@@ -9192,6 +10121,27 @@ export const proto = $root.proto = (() => {
                     object.path = message.path;
                 if (message.pathHash != null && $Object.hasOwnProperty.call(message, "pathHash"))
                     object.pathHash = message.pathHash;
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    object.opId = message.opId;
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                        object.rev = typeof message.rev === "number" ? $BigInt(message.rev) : $util.Long.fromBits(message.rev.low >>> 0, message.rev.high >>> 0, false).toBigInt();
+                    else if (typeof message.rev === "number")
+                        object.rev = options.longs === $String ? $String(message.rev) : message.rev;
+                    else
+                        object.rev = options.longs === $String ? $util.Long.prototype.toString.call(message.rev) : options.longs === $Number ? new $util.LongBits(message.rev.low >>> 0, message.rev.high >>> 0).toNumber() : message.rev;
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha"))
+                    object.sha = message.sha;
+                if (message.merged != null && $Object.hasOwnProperty.call(message, "merged"))
+                    object.merged = message.merged;
+                if (message.content != null && $Object.hasOwnProperty.call(message, "content"))
+                    object.content = message.content;
+                if (message.conflictCopy != null && $Object.hasOwnProperty.call(message, "conflictCopy"))
+                    object.conflictCopy = message.conflictCopy;
+                if (message.rejected != null && $Object.hasOwnProperty.call(message, "rejected"))
+                    object.rejected = message.rejected;
+                if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
+                    object.rejectReason = message.rejectReason;
                 return object;
             };
 
@@ -9231,6 +10181,14 @@ export const proto = $root.proto = (() => {
              * @property {number|Long|null} [lastTime] NoteDeleteAckMessage lastTime
              * @property {string|null} [path] NoteDeleteAckMessage path
              * @property {string|null} [pathHash] NoteDeleteAckMessage pathHash
+             * @property {string|null} [opId] NoteDeleteAckMessage opId
+             * @property {number|Long|null} [rev] NoteDeleteAckMessage rev
+             * @property {string|null} [sha] NoteDeleteAckMessage sha
+             * @property {boolean|null} [merged] NoteDeleteAckMessage merged
+             * @property {string|null} [content] NoteDeleteAckMessage content
+             * @property {string|null} [conflictCopy] NoteDeleteAckMessage conflictCopy
+             * @property {boolean|null} [rejected] NoteDeleteAckMessage rejected
+             * @property {string|null} [rejectReason] NoteDeleteAckMessage rejectReason
              * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
@@ -9287,6 +10245,70 @@ export const proto = $root.proto = (() => {
             NoteDeleteAckMessage.prototype.pathHash = "";
 
             /**
+             * NoteDeleteAckMessage opId.
+             * @member {string} opId
+             * @memberof proto.v1.NoteDeleteAckMessage
+             * @instance
+             */
+            NoteDeleteAckMessage.prototype.opId = "";
+
+            /**
+             * NoteDeleteAckMessage rev.
+             * @member {number|Long} rev
+             * @memberof proto.v1.NoteDeleteAckMessage
+             * @instance
+             */
+            NoteDeleteAckMessage.prototype.rev = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+            /**
+             * NoteDeleteAckMessage sha.
+             * @member {string} sha
+             * @memberof proto.v1.NoteDeleteAckMessage
+             * @instance
+             */
+            NoteDeleteAckMessage.prototype.sha = "";
+
+            /**
+             * NoteDeleteAckMessage merged.
+             * @member {boolean} merged
+             * @memberof proto.v1.NoteDeleteAckMessage
+             * @instance
+             */
+            NoteDeleteAckMessage.prototype.merged = false;
+
+            /**
+             * NoteDeleteAckMessage content.
+             * @member {string} content
+             * @memberof proto.v1.NoteDeleteAckMessage
+             * @instance
+             */
+            NoteDeleteAckMessage.prototype.content = "";
+
+            /**
+             * NoteDeleteAckMessage conflictCopy.
+             * @member {string} conflictCopy
+             * @memberof proto.v1.NoteDeleteAckMessage
+             * @instance
+             */
+            NoteDeleteAckMessage.prototype.conflictCopy = "";
+
+            /**
+             * NoteDeleteAckMessage rejected.
+             * @member {boolean} rejected
+             * @memberof proto.v1.NoteDeleteAckMessage
+             * @instance
+             */
+            NoteDeleteAckMessage.prototype.rejected = false;
+
+            /**
+             * NoteDeleteAckMessage rejectReason.
+             * @member {string} rejectReason
+             * @memberof proto.v1.NoteDeleteAckMessage
+             * @instance
+             */
+            NoteDeleteAckMessage.prototype.rejectReason = "";
+
+            /**
              * Creates a new NoteDeleteAckMessage instance using the specified properties.
              * @function create
              * @memberof proto.v1.NoteDeleteAckMessage
@@ -9324,6 +10346,22 @@ export const proto = $root.proto = (() => {
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.path);
                 if (message.pathHash != null && $Object.hasOwnProperty.call(message, "pathHash") && message.pathHash !== "")
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.pathHash);
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId") && message.opId !== "")
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.opId);
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev") && (typeof message.rev === "object" ? message.rev.low || message.rev.high : message.rev !== 0))
+                    writer.uint32(/* id 5, wireType 0 =*/40).int64(message.rev);
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha") && message.sha !== "")
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.sha);
+                if (message.merged != null && $Object.hasOwnProperty.call(message, "merged") && message.merged !== false)
+                    writer.uint32(/* id 7, wireType 0 =*/56).bool(message.merged);
+                if (message.content != null && $Object.hasOwnProperty.call(message, "content") && message.content !== "")
+                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.content);
+                if (message.conflictCopy != null && $Object.hasOwnProperty.call(message, "conflictCopy") && message.conflictCopy !== "")
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.conflictCopy);
+                if (message.rejected != null && $Object.hasOwnProperty.call(message, "rejected") && message.rejected !== false)
+                    writer.uint32(/* id 10, wireType 0 =*/80).bool(message.rejected);
+                if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason") && message.rejectReason !== "")
+                    writer.uint32(/* id 11, wireType 2 =*/90).string(message.rejectReason);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
                         writer.raw(message.$unknowns[i]);
@@ -9398,6 +10436,78 @@ export const proto = $root.proto = (() => {
                                 delete message.pathHash;
                             continue;
                         }
+                    case 4: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.opId = value;
+                            else
+                                delete message.opId;
+                            continue;
+                        }
+                    case 5: {
+                            if (wireType !== 0)
+                                break;
+                            if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                                message.rev = value;
+                            else
+                                delete message.rev;
+                            continue;
+                        }
+                    case 6: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.sha = value;
+                            else
+                                delete message.sha;
+                            continue;
+                        }
+                    case 7: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.bool())
+                                message.merged = value;
+                            else
+                                delete message.merged;
+                            continue;
+                        }
+                    case 8: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.content = value;
+                            else
+                                delete message.content;
+                            continue;
+                        }
+                    case 9: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.conflictCopy = value;
+                            else
+                                delete message.conflictCopy;
+                            continue;
+                        }
+                    case 10: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.bool())
+                                message.rejected = value;
+                            else
+                                delete message.rejected;
+                            continue;
+                        }
+                    case 11: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.rejectReason = value;
+                            else
+                                delete message.rejectReason;
+                            continue;
+                        }
                     }
                     reader.skipType(wireType, _depth, tag);
                     if (!reader.discardUnknown) {
@@ -9450,6 +10560,30 @@ export const proto = $root.proto = (() => {
                 if (message.pathHash != null && $Object.hasOwnProperty.call(message, "pathHash"))
                     if (!$util.isString(message.pathHash))
                         return "pathHash: string expected";
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    if (!$util.isString(message.opId))
+                        return "opId: string expected";
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (!$util.isInteger(message.rev) && !(message.rev && $util.isInteger(message.rev.low) && $util.isInteger(message.rev.high)))
+                        return "rev: integer|Long expected";
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha"))
+                    if (!$util.isString(message.sha))
+                        return "sha: string expected";
+                if (message.merged != null && $Object.hasOwnProperty.call(message, "merged"))
+                    if (typeof message.merged !== "boolean")
+                        return "merged: boolean expected";
+                if (message.content != null && $Object.hasOwnProperty.call(message, "content"))
+                    if (!$util.isString(message.content))
+                        return "content: string expected";
+                if (message.conflictCopy != null && $Object.hasOwnProperty.call(message, "conflictCopy"))
+                    if (!$util.isString(message.conflictCopy))
+                        return "conflictCopy: string expected";
+                if (message.rejected != null && $Object.hasOwnProperty.call(message, "rejected"))
+                    if (typeof message.rejected !== "boolean")
+                        return "rejected: boolean expected";
+                if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
+                    if (!$util.isString(message.rejectReason))
+                        return "rejectReason: string expected";
                 return null;
             };
 
@@ -9487,6 +10621,37 @@ export const proto = $root.proto = (() => {
                 if (object.pathHash != null)
                     if (typeof object.pathHash !== "string" || object.pathHash.length)
                         message.pathHash = $String(object.pathHash);
+                if (object.opId != null)
+                    if (typeof object.opId !== "string" || object.opId.length)
+                        message.opId = $String(object.opId);
+                if (object.rev != null)
+                    if (typeof object.rev === "object" ? object.rev.low || object.rev.high : $Number(object.rev) !== 0)
+                        if ($util.Long)
+                            message.rev = $util.Long.fromValue(object.rev, false);
+                        else if (typeof object.rev === "string")
+                            message.rev = $parseInt(object.rev, 10);
+                        else if (typeof object.rev === "number")
+                            message.rev = object.rev;
+                        else if (typeof object.rev === "object")
+                            message.rev = new $util.LongBits(object.rev.low >>> 0, object.rev.high >>> 0).toNumber();
+                if (object.sha != null)
+                    if (typeof object.sha !== "string" || object.sha.length)
+                        message.sha = $String(object.sha);
+                if (object.merged != null)
+                    if (object.merged)
+                        message.merged = $Boolean(object.merged);
+                if (object.content != null)
+                    if (typeof object.content !== "string" || object.content.length)
+                        message.content = $String(object.content);
+                if (object.conflictCopy != null)
+                    if (typeof object.conflictCopy !== "string" || object.conflictCopy.length)
+                        message.conflictCopy = $String(object.conflictCopy);
+                if (object.rejected != null)
+                    if (object.rejected)
+                        message.rejected = $Boolean(object.rejected);
+                if (object.rejectReason != null)
+                    if (typeof object.rejectReason !== "string" || object.rejectReason.length)
+                        message.rejectReason = $String(object.rejectReason);
                 return message;
             };
 
@@ -9515,6 +10680,18 @@ export const proto = $root.proto = (() => {
                         object.lastTime = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                     object.path = "";
                     object.pathHash = "";
+                    object.opId = "";
+                    if ($util.Long) {
+                        let long = new $util.Long(0, 0, false);
+                        object.rev = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                    } else
+                        object.rev = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                    object.sha = "";
+                    object.merged = false;
+                    object.content = "";
+                    object.conflictCopy = "";
+                    object.rejected = false;
+                    object.rejectReason = "";
                 }
                 if (message.lastTime != null && $Object.hasOwnProperty.call(message, "lastTime"))
                     if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
@@ -9527,6 +10704,27 @@ export const proto = $root.proto = (() => {
                     object.path = message.path;
                 if (message.pathHash != null && $Object.hasOwnProperty.call(message, "pathHash"))
                     object.pathHash = message.pathHash;
+                if (message.opId != null && $Object.hasOwnProperty.call(message, "opId"))
+                    object.opId = message.opId;
+                if (message.rev != null && $Object.hasOwnProperty.call(message, "rev"))
+                    if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                        object.rev = typeof message.rev === "number" ? $BigInt(message.rev) : $util.Long.fromBits(message.rev.low >>> 0, message.rev.high >>> 0, false).toBigInt();
+                    else if (typeof message.rev === "number")
+                        object.rev = options.longs === $String ? $String(message.rev) : message.rev;
+                    else
+                        object.rev = options.longs === $String ? $util.Long.prototype.toString.call(message.rev) : options.longs === $Number ? new $util.LongBits(message.rev.low >>> 0, message.rev.high >>> 0).toNumber() : message.rev;
+                if (message.sha != null && $Object.hasOwnProperty.call(message, "sha"))
+                    object.sha = message.sha;
+                if (message.merged != null && $Object.hasOwnProperty.call(message, "merged"))
+                    object.merged = message.merged;
+                if (message.content != null && $Object.hasOwnProperty.call(message, "content"))
+                    object.content = message.content;
+                if (message.conflictCopy != null && $Object.hasOwnProperty.call(message, "conflictCopy"))
+                    object.conflictCopy = message.conflictCopy;
+                if (message.rejected != null && $Object.hasOwnProperty.call(message, "rejected"))
+                    object.rejected = message.rejected;
+                if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
+                    object.rejectReason = message.rejectReason;
                 return object;
             };
 

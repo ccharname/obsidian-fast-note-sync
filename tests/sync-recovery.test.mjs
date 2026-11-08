@@ -17,8 +17,6 @@ function load(file, extra = {}, globals = {}) {
     window: { setTimeout: fn => { fn(); return 1; }, clearTimeout: noop },
     ...globals,
     require: id => id === 'obsidian' ? { normalizePath: x => x, TFile: class {}, Platform: { isMobile: false } }
-      : id.includes('conflict_paths') ? { conflictStem: (p, h) => p.replace(/\.md$/, '') + '_' + h(p) }
-      : id.includes('note_core_deps') ? { isAutoMerge: () => !!globals.autoMerge, forgetNote: async () => {}, clearConflictState: async () => {}, conflictFilePaths: () => ({}) }
       : id.includes('helpers') ? helpers
       : id.includes('sync_log_manager') ? { SyncLogManager: { getInstance: () => logs } }
       : extra[id] || {} });
@@ -68,25 +66,6 @@ limiter.releaseSlot('after-reconnect');
 assert.equal(limiter.activeKeys.size, 0);
 
 const note = load('src/lib/sync/operator_note.ts');
-{
-  const protocolNote = load('src/lib/sync/operator_note.ts', {}, { autoMerge: true });
-  const completed = [], pageMap = new Map();
-  const p = { settings: { syncEnabled: true }, syncState: { conflictedPaths: new Set(['conflict.md']), pendingNotePushPageIndex: pageMap },
-    app: { vault: { getFileByPath: path => ({ path }) } }, noteSyncTasks: { failed: 0 }, pendingNoteModifies: new Map([['closed.md','legacy-pending']]),
-    recordSyncCompleted: (_type, page) => completed.push(page), localStorageManager: { getMetadata: () => 0, setMetadata: noop },
-    noteCore: { requestUpload: async path => path === 'conflict.md' ? 'blocked' : 'sent', onAck: async () => true } };
-  await protocolNote.receiveNoteUpload({ path: 'conflict.md' }, p);
-  await protocolNote.receiveNoteUpload({ path: 'closed.md' }, p);
-  assert.equal(completed.length, 1, 'historical conflict is retained but completes its NeedPush item');
-  assert.equal(pageMap.has('closed.md'), true, 'unpaged NeedPush remains attributable');
-  await protocolNote.receiveNoteModifyAck({ path: 'closed.md', realtime: true }, p);
-  assert.equal(completed.length, 2, 'contextless exact ACK completes unpaged NeedPush despite realtime admission');
-  assert.equal(p.syncState.conflictedPaths.has('conflict.md'), true);
-  p.noteCore.requestUpload = async () => { throw Error('disk full'); };
-  await protocolNote.receiveNoteUpload({ path: 'failed-persist.md' }, p);
-  assert.equal(completed.length, 3, 'journal error is processed as failure rather than leaving round blocked');
-  assert.equal(p.noteSyncTasks.failed, 1);
-}
 function fixture(content = 'same', base = 'same', pending = true) {
   const file = { path: 'test.md', stat: { mtime: 20, size: content.length } };
   const completed = [], released = [], writes = [], hashes = [];
@@ -98,6 +77,7 @@ function fixture(content = 'same', base = 'same', pending = true) {
     concurrencyLimiter: { releaseSlot: path => released.push(path) },
     recordSyncCompleted: (type, page) => completed.push([type, page]),
     localStorageManager: { savePending: noop, setConflictedPaths: noop, getMetadata: () => 0, setMetadata: noop },
+    serverMerge: { supported: false },
     lockManager: { withLock: async (_, fn) => fn() }, addIgnoredFile: noop, removeIgnoredFile: noop,
     statusBarManager: { updateConflictBadge: noop }, noteSyncTasks: { failed: 0 },
     fileHashManager: { getPathHash: () => base, getValidHash: () => content, setFileHash: (...a) => hashes.push(a) },
@@ -140,7 +120,6 @@ function fixture(content = 'same', base = 'same', pending = true) {
   const actions = new Proxy({}, { get: (_, key) => key });
   const { WebSocketManager } = load('src/lib/sync/websocket_manager.ts', {
     './websocket_action': actions,
-    './context_filter': { classifyContext: o => (!o.activeContext || o.msgContext === o.activeContext ? 'process' : 'discard') },
     './operator': { receiveOperators: new Map([['NoteSyncMtime', x => received.push(x)]]) }
   });
   const manager = Object.create(WebSocketManager.prototype);

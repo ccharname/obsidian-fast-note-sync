@@ -13,9 +13,6 @@ import { ConfigHashManager } from "./lib/storage/config_hash_manager";
 import { RecycleBinModal } from "./views/recycle-bin-modal";
 import { FileCloudPreview } from "./lib/storage/file_cloud_preview";
 import { FileHashManager } from "./lib/storage/file_hash_manager";
-import { BaseStore } from "./lib/storage/base_store";
-import { ServerMergeCore as NoteMergeCore } from "./lib/sync/server_merge_core";
-import { createBaseStore, createNoteCore } from "./lib/sync/note_core_deps";
 import { DebugLogManager } from "./lib/utils/debug_log_manager";
 import { SyncLogManager } from "./lib/sync/sync_log_manager";
 import { DebugLogModal } from "./views/debug-log-modal";
@@ -34,6 +31,8 @@ import { $ } from "./i18n/lang";
 import { SsoImportModal } from "./views/sso-import-modal";
 import { StatusBarManager } from "./lib/ui/status_bar_manager";
 import { SyncProgressTracker } from "./lib/sync/sync_progress_tracker";
+import type { ServerMergeClient } from "./lib/sync/server_merge_client";
+import { createServerMerge } from "./lib/sync/server_merge_env";
 
 
 
@@ -64,15 +63,15 @@ export default class FastSync extends Plugin {
   menuManager: MenuManager                        // 菜单管理器
   shareIndicatorManager: ShareIndicatorManager    // 分享指示器管理器 / Share indicator manager
   fileHashManager: FileHashManager                // 文件哈希管理器
-  baseStore: BaseStore                            // 三方合并 base 存储
-  noteCore: NoteMergeCore                         // 服务端合并协议的本地祖先与请求状态
-  private noteSweepTimer: number | null = null
+  serverMerge!: ServerMergeClient                 // 服务端合并瘦客户端状态机 / server-side merge thin client
   configHashManager: ConfigHashManager            // 配置哈希管理器
   localStorageManager: LocalStorageManager        // 本地存储管理器
   fileCloudPreview: FileCloudPreview              // 云端文件预览管理器
   folderSnapshotManager: FolderSnapshotManager    // 文件夹快照管理器
   statusBarManager: StatusBarManager              // 状态栏管理器
   readonly progressTracker = new SyncProgressTracker() // 进度追踪器
+  /** 卸载标志：onunload 置 true；所有异步续接点、消息处理与 casWrite 入口据此放弃，旧实例不再建连 / 写盘 */
+  unloaded = false
   private menuManagerInitialized = false          // 防止 onLayoutReady 重复初始化 / Guard against duplicate onLayoutReady init
 
   // ─── Aggregated state objects (replaces 30+ scattered fields) ────────────────
@@ -489,7 +488,7 @@ export default class FastSync extends Plugin {
     // 大部分初始化逻辑移动到 onLayoutReady 之后，避免阻塞 Obsidian 启动
     this.app.workspace.onLayoutReady(async () => {
       // 防止重复初始化 (Prevent duplicate initialization)
-      if (this.menuManagerInitialized) return;
+      if (this.menuManagerInitialized || this.unloaded) return;
       this.menuManagerInitialized = true
 
       // 校验与清洗陈旧的版本元数据标记 (Validate and clean up redundant version badges)1
@@ -543,6 +542,7 @@ export default class FastSync extends Plugin {
       // 4. 初始化功能管理器 (实例化)
       this.fileCloudPreview = new FileCloudPreview(this)
       this.fileHashManager = new FileHashManager(this)
+      this.serverMerge = createServerMerge(this)
       this.configHashManager = new ConfigHashManager(this)
       this.folderSnapshotManager = new FolderSnapshotManager(this)
       this.configManager = new ConfigManager(this)
@@ -556,14 +556,18 @@ export default class FastSync extends Plugin {
         initPromises.push(this.configHashManager.initialize())
       }
       await Promise.all(initPromises)
+      if (this.unloaded) return // 初始化期间被卸载：不再继续建连
 
-      // 服务端统一合并：本地保存已确认正文、草稿祖先和持久请求身份，handler 按 conflictMode 使用。
-      this.baseStore = createBaseStore(this)
-      await this.baseStore.load()
-      this.noteCore = createNoteCore(this)
-      await this.noteCore.initialize()
-      this.noteSweepTimer = window.setInterval(() => this.noteCore.sweep(), 5000)
-      this.registerInterval(this.noteSweepTimer)
+      // 清理旧自建版遗留的本地合并目录（仅这两个固定名）/ remove leftovers of the old self-built merge stack
+      for (const legacyDir of ["base", "merge-journal"]) {
+        const dir = `${getPluginDir(this)}/${legacyDir}`
+        try {
+          if (await this.app.vault.adapter.exists(dir)) await this.app.vault.adapter.rmdir(dir, true)
+        } catch (e) {
+          dumpError(`[FastSync] Failed to remove legacy dir ${dir}`, e)
+        }
+      }
+      if (this.unloaded) return
 
       // 崩溃恢复：从 localStorage 恢复持久化的 pending Map，过滤本地已不存在的路径
       // Crash recovery: restore persisted pending Maps, filtering out paths that no longer exist locally
@@ -651,6 +655,10 @@ export default class FastSync extends Plugin {
   }
 
   onunload() {
+    this.unloaded = true
+    if (this.syncTimer) window.clearTimeout(this.syncTimer)
+    this.websocket?.unRegister(true) // 立即关连接并清重连定时器，之后旧实例不再收推送
+    this.serverMerge?.dispose()  // 清定时器与全部路径状态 / clear timers and per-path state
     // 取消当前正在进行的同步，重置运行时状态
     cancelSync(this)
     abortAllFileOperations()
@@ -661,7 +669,6 @@ export default class FastSync extends Plugin {
     cleanupConfigReloadTimer()
     // 卸载前强制落盘防抖累积的哈希/快照写入，避免丢失
     this.fileHashManager?.flush()
-    void this.baseStore?.flush()
     this.configHashManager?.flush()
     this.folderSnapshotManager?.flush()
     // 取消注册文件事件
@@ -900,6 +907,7 @@ export default class FastSync extends Plugin {
   }
 
   reloadServices(forceRegister: boolean = true, setItem: string = "") {
+    if (this.unloaded && forceRegister) return
     if (setItem === "api" || !this.runApi) {
       this.runApi = this.settings.api;
       this.runWsApi = this.settings.api ? this.settings.api.replace(/^http/, "ws") : "";

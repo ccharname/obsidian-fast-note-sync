@@ -3,8 +3,7 @@ import { TFolder, TFile, normalizePath } from "obsidian";
 import { receiveFileUpload, receiveFileSyncUpdate, receiveFileSyncDelete, receiveFileSyncMtime, receiveFileSyncChunkDownload, receiveFileSyncEnd, checkAndUploadAttachments, receiveFileSyncRename, receiveFileRenameAck, receiveFileUploadAck, receiveFileDeleteAck, isPluginUnloading, sweepStalledDownloadSessions } from "./operator_file";
 import { hashContent, hashContentAsync, dump, isPathExcluded, isFolderSyncPathExcluded, configIsPathExcluded, getConfigSyncCustomDirs, generateUUID, showSyncNotice, isLargeBinarySyncRisk, describeBinarySyncLimit, hashFileAsync, formatFileSize, yieldToMain, getPluginDir } from "../utils/helpers";
 import { receiveConfigSyncModify, receiveConfigUpload, receiveConfigSyncMtime, receiveConfigSyncDelete, receiveConfigSyncEnd, configAllPaths, receiveConfigSyncClear, receiveConfigModifyAck, receiveConfigDeleteAck } from "./operator_config";
-import { conflictFilePaths } from "./note_core_deps";
-import { receiveNoteSyncModify, receiveNoteUpload, receiveNoteSyncMtime, receiveNoteSyncDelete, receiveNoteSyncEnd, receiveNoteSyncRename, receiveNoteModifyAck, receiveNoteRenameAck, receiveNoteDeleteAck } from "./operator_note";
+import { beginNoteSyncRound, commitNoteSyncRound, abortNoteSyncRound, dispatchOfflineNoteDeletes, receiveNoteSyncModify, receiveNoteUpload, receiveNoteSyncMtime, receiveNoteSyncDelete, receiveNoteSyncEnd, receiveNoteSyncRename, receiveNoteModifyAck, receiveNoteRenameAck, receiveNoteDeleteAck } from "./operator_note";
 import { SyncMode, SnapFile, SnapFolder, SyncEndData, PathHashFile, NoteSyncData, FileSyncData, ConfigSyncData, FolderSyncData } from "../utils/types";
 import { receiveFolderSyncModify, receiveFolderSyncDelete, receiveFolderSyncRename, receiveFolderSyncEnd } from "./operator_folder";
 import { FileCloudPreview } from "../storage/file_cloud_preview";
@@ -148,6 +147,7 @@ function restartStalledSync(plugin: FastSync, intervalId?: number): void {
     message: 'Sync stalled waiting for server pages; restarting a new round', timestamp: Date.now()
   });
   plugin.concurrencyLimiter.clear(); // 硬上限路径下槽位可能仍被丢失 ACK 的任务占着 / slots may still be held by lost ACKs on the hard-cap path
+  abortNoteSyncRound?.(plugin);
   plugin.syncState.activeSyncContext = null;
   plugin.syncTypeCompleteCount = 0;
   plugin.resetSyncTasks();
@@ -281,6 +281,8 @@ export function checkSyncCompletion(plugin: FastSync, intervalId?: number, _sync
     // below whether refreshing lastSyncSuccessTime is trustworthy
     const offlineGuardSkippedThisRound = plugin.syncState.offlineGuardSkippedThisRound;
 
+    commitNoteSyncRound(plugin);
+
     plugin.syncState.activeSyncContext = null; // 同步完成，清空活跃的上下文 / Sync completed, reset the active context
     plugin.isSyncing = false;
     plugin.syncTypeCompleteCount = 0;
@@ -366,9 +368,9 @@ export const receiveOperators: Map<WSAction.WSReceiveAction, OperatorHandler> = 
   [WSAction.NoteSyncMtime, receiveNoteSyncMtime],
   [WSAction.NoteSyncDelete, receiveNoteSyncDelete],
   [WSAction.NoteSyncRename, receiveNoteSyncRename],
-  [WSAction.NoteModifyAck, (data, plugin) => receiveNoteModifyAck(data as { lastTime?: number; path?: string }, plugin)],
-  [WSAction.NoteRenameAck, (data, plugin) => receiveNoteRenameAck(data as { lastTime?: number; path?: string }, plugin)],
-  [WSAction.NoteDeleteAck, (data, plugin) => receiveNoteDeleteAck(data as { lastTime?: number; path?: string }, plugin)],
+  [WSAction.NoteModifyAck, (data, plugin) => receiveNoteModifyAck(data as Parameters<typeof receiveNoteModifyAck>[0], plugin)],
+  [WSAction.NoteRenameAck, (data, plugin) => receiveNoteRenameAck(data as Parameters<typeof receiveNoteRenameAck>[0], plugin)],
+  [WSAction.NoteDeleteAck, (data, plugin) => receiveNoteDeleteAck(data as Parameters<typeof receiveNoteDeleteAck>[0], plugin)],
   [WSAction.NoteSyncEnd, (data, plugin) => receiveSyncEndWrapper(data, plugin, "note")],
   [WSAction.FileUpload, receiveFileUpload],
   [WSAction.FileSyncUpdate, receiveFileSyncUpdate],
@@ -522,18 +524,9 @@ async function receiveSyncEndWrapper(data: unknown, plugin: FastSync, type: "not
     plugin.fileHashManager.removeFileHashes(plugin.pendingDeleteNotePaths)
     plugin.pendingDeleteNotePaths.clear()
     // 同步结束，提交本轮同步中可能产生的待确认上传 hash
-    // clientAutoMerge：仍在单飞登记里的在途上传不能被 SyncEnd 当作已提交清掉（它们只能由 Ack/530 结算）
-    const inFlight = plugin.settings.conflictMode === "clientAutoMerge" && plugin.noteCore ? plugin.noteCore.tracker : null
-    plugin.fileHashManager.setFileHashes(
-      inFlight ? [...plugin.pendingNoteModifies].filter(([p]) => !inFlight.has(p)) : plugin.pendingNoteModifies,
-      (path) => plugin.app.vault.getFileByPath(path)?.stat)
-    if (inFlight) {
-      for (const p of [...plugin.pendingNoteModifies.keys()]) if (!inFlight.has(p)) plugin.pendingNoteModifies.delete(p)
-      plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
-    } else {
-      plugin.pendingNoteModifies.clear()
-      plugin.localStorageManager.clearPending('pendingNoteModifies')
-    }
+    plugin.fileHashManager.setFileHashes(plugin.pendingNoteModifies, (path) => plugin.app.vault.getFileByPath(path)?.stat)
+    plugin.pendingNoteModifies.clear()
+    plugin.localStorageManager.clearPending('pendingNoteModifies')
     // 同步结束，提交扫描阶段计算出的哈希 (Commit hashes calculated during scan)
     commitScannedHashes(plugin.scannedNoteHashes, (m) => plugin.fileHashManager.bulkSetFromScanned(m));
     // 同步结束，强制落盘本轮防抖累积的哈希写入
@@ -642,17 +635,8 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
     if (await adapter.exists(conflictDir)) {
       const files = await adapter.list(conflictDir);
       const deletePromises: Promise<void>[] = [];
-      // 仍在 conflictedPaths 里的路径，其 base/remote/meta 是解决冲突的证据，不能清掉
-      const keep = new Set<string>();
-      for (const cp of plugin.syncState.conflictedPaths) {
-        const cf = conflictFilePaths(plugin, cp);
-        keep.add(cf.base);
-        keep.add(cf.remote);
-        keep.add(cf.meta);
-      }
       if (files && files.files) {
         for (const f of files.files) {
-          if (keep.has(f)) continue;
           deletePromises.push(adapter.remove(f));
         }
       }
@@ -1192,10 +1176,14 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
       configTime = Number(plugin.localStorageManager.getMetadata("lastConfigSyncTime"));
       folderTime = Number(plugin.localStorageManager.getMetadata("lastFolderSyncTime"));
     }
+    beginNoteSyncRound(plugin, noteTime === 0)
 
     // 分批发送方案替代原截断方案：不再对 sync 数组截断，所有数据通过 sendInBatches 分批发送
     // Replaced truncation with batch-send: arrays are no longer capped; sendInBatches handles chunking
     dump(`[Sync] Arrays ready: notes=${notes.length}, files=${files.length}, folders=${folders.length}, configs=${configs.length}`);
+
+    // serverMerge：离线删除走带 baseSha/opId 的 Delete，不进 NoteSync 的 delNotes
+    if (plugin.settings.offlineDeleteSyncEnabled && dispatchOfflineNoteDeletes(delNotes, plugin)) delNotes.length = 0;
 
     const noteData: NoteSyncData = { lastTime: noteTime, notes, delNotes, missingNotes };
     const fileData: FileSyncData = { lastTime: fileTime, files, delFiles, missingFiles };
@@ -1248,6 +1236,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
     // invocation, so a late exception from a superseded (stale) sync session cannot
     // clobber a newer session that has already taken over.
     if (plugin.syncState.activeSyncContext === context) {
+      abortNoteSyncRound(plugin);
       plugin.syncState.activeSyncContext = null; // 同步失败，清空上下文 / Sync failed, reset the context
       plugin.updateStatusBar($("ui.status.failed") || "Sync Failed");
       window.setTimeout(() => plugin.updateStatusBar(""), 10000);
@@ -1270,6 +1259,7 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
  * Cancel the current sync and reset all runtime states.
  */
 export function cancelSync(plugin: FastSync): void {
+  abortNoteSyncRound?.(plugin);
   if (plugin.syncState.progressCheckIntervalId !== null) {
     window.clearInterval(plugin.syncState.progressCheckIntervalId);
     plugin.syncState.progressCheckIntervalId = null;

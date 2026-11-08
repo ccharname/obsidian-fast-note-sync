@@ -161,8 +161,6 @@ export class LocalStorageManager {
         // 同步清除持久化的冲突路径，避免重启后旧冲突记录在全新同步后误触发冲突列表弹窗
         // Also clear persisted conflicted paths so stale conflicts don't re-surface after a fresh sync
         this.setConflictedPaths(new Set());
-        // base 与 syncHash 必须一起清，否则 base 失去对应关系（读取时 hash 校验是第二道保险）
-        void this.plugin.baseStore?.clear();
     }
 
     constructor(plugin: FastSync) {

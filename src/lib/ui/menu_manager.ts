@@ -1,5 +1,3 @@
-import { conflictStem } from "../sync/conflict_paths";
-import { readConflictMeta } from "../sync/note_core_deps";
 import { Menu, MenuItem, setIcon, Platform, WorkspaceLeaf, normalizePath, Notice } from 'obsidian';
 
 import { startupSync, startupFullSync, resetSettingSyncTime, rebuildAllHashes, clearAllHashes, cancelSync } from '../sync/operator';
@@ -777,10 +775,11 @@ export class MenuManager {
 
     try {
       const adapter = this.plugin.app.vault.adapter;
-      const stem = conflictStem(normalizedPath, hashContent);
+      const safeName = normalizedPath.replace(/\.md$/, "").replace(/[/\\]/g, "_");
+      const pathHash = hashContent(normalizedPath);
       const conflictDir = `${getPluginDir(this.plugin)}/conflict-notes`;
-      const baseBackupPath = `${conflictDir}/${stem}.base.md`;
-      const remoteBackupPath = `${conflictDir}/${stem}.remote.md`;
+      const baseBackupPath = `${conflictDir}/${safeName}_${pathHash}.base.md`;
+      const remoteBackupPath = `${conflictDir}/${safeName}_${pathHash}.remote.md`;
 
       let baseContent = "";
       let serverContent = "";
@@ -798,15 +797,13 @@ export class MenuManager {
         action?: string;
         message?: string;
       }
-      const meta = await readConflictMeta(this.plugin, normalizedPath);
       const logs = SyncLogManager.getInstance().getLogs();
       const targetLog = (logs as SyncLogItem[]).find((l) => l.path && normalizePath(l.path) === normalizedPath && l.action === "NoteManualMergeConflict");
-      // serverHash 优先读落盘的冲突元数据（不依赖内存日志，重启后仍在）
-      let serverHash = meta?.serverHash ?? "";
+      let serverHash = "";
       if (targetLog && targetLog.message) {
         try {
           const conflictData = JSON.parse(targetLog.message) as Record<string, unknown>;
-          if (!serverHash) serverHash = typeof conflictData.serverHash === "string" ? conflictData.serverHash : "";
+          serverHash = typeof conflictData.serverHash === "string" ? conflictData.serverHash : "";
           if (!serverContent && typeof conflictData.serverContent === "string") {
             serverContent = conflictData.serverContent;
           }
