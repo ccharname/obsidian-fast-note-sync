@@ -106,6 +106,11 @@ function commitScannedHashes(scanned: ScannedHashMap, commit: (m: ScannedHashMap
 // start a new one; completed items do not reappear, so progress accumulates. Pending local edits
 // are kept (cancelSync is not used).
 export const SYNC_STALL_RESTART_MS = 300000;
+// 硬上限（lucky 追加）：即使仍有"在途"并发槽位（ACK 丢失而连接未断时槽位永不释放），
+// 所有计数 30 分钟纹丝不动也强制重启一轮，保证不存在同步永久挂起的路径。
+// Hard cap (lucky addition): even with slots still "in flight" (a lost ACK on a live connection never
+// releases its slot), restart the round after 30 minutes with every counter frozen, so no path can hang forever.
+export const SYNC_STALL_HARD_RESTART_MS = 1800000;
 const syncStallState: { context?: string; signature: string; lastProgressAt: number } = { signature: "", lastProgressAt: 0 };
 
 export function isSyncStalled(plugin: FastSync, ownerContext: string | undefined, now = Date.now()): boolean {
@@ -122,6 +127,7 @@ export function isSyncStalled(plugin: FastSync, ownerContext: string | undefined
     syncStallState.lastProgressAt = now;
     return false;
   }
+  if (now - syncStallState.lastProgressAt > SYNC_STALL_HARD_RESTART_MS) return true;
   const limiter = plugin.concurrencyLimiter as unknown as { activeKeys: { size: number }; queue: unknown[] };
   const idle = limiter.activeKeys.size === 0 && limiter.queue.length === 0
     && plugin.fileDownloadSessions.size === 0 && !plugin.isSyncRequesting;
@@ -140,6 +146,7 @@ function restartStalledSync(plugin: FastSync, intervalId?: number): void {
     id: `stall-${Date.now()}`, type: 'info', action: 'SyncSummary', status: 'error',
     message: 'Sync stalled waiting for server pages; restarting a new round', timestamp: Date.now()
   });
+  plugin.concurrencyLimiter.clear(); // 硬上限路径下槽位可能仍被丢失 ACK 的任务占着 / slots may still be held by lost ACKs on the hard-cap path
   plugin.syncState.activeSyncContext = null;
   plugin.syncTypeCompleteCount = 0;
   plugin.resetSyncTasks();

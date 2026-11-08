@@ -14,7 +14,7 @@ vm.runInNewContext(code, { module, exports: module.exports, console, window: { s
     : id.includes('operator_file') ? { sweepStalledDownloadSessions: async () => undefined }
     : id.includes('sync_log_manager') ? { SyncLogManager: { getInstance: () => ({ addOrUpdateLog: noop }) } }
     : id.includes('i18n') ? { $: k => k } : {} });
-const { isSyncStalled, SYNC_STALL_RESTART_MS } = module.exports;
+const { isSyncStalled, SYNC_STALL_RESTART_MS, SYNC_STALL_HARD_RESTART_MS } = module.exports;
 
 const mk = () => ({
   noteSyncTasks: { completed: 1, failed: 0 }, fileSyncTasks: { completed: 5, failed: 0 },
@@ -35,14 +35,22 @@ p.fileSyncTasks.completed++;
 assert.equal(isSyncStalled(p, 'ctx', t0 + 2 * SYNC_STALL_RESTART_MS), false);
 assert.equal(isSyncStalled(p, 'ctx', t0 + 2 * SYNC_STALL_RESTART_MS + 1000), false);
 
-// Work in flight is never a stall, however long it takes
+// Work in flight is not a (soft) stall at the idle limit...
 const q = mk();
 q.concurrencyLimiter.activeKeys.add('upload_x');
 isSyncStalled(q, 'ctx2', t0);
-assert.equal(isSyncStalled(q, 'ctx2', t0 + 10 * SYNC_STALL_RESTART_MS), false);
+assert.equal(isSyncStalled(q, 'ctx2', t0 + 5 * SYNC_STALL_RESTART_MS), false);
 q.concurrencyLimiter.activeKeys.clear();
 q.fileDownloadSessions.set('s', {});
-assert.equal(isSyncStalled(q, 'ctx2', t0 + 10 * SYNC_STALL_RESTART_MS), false);
+assert.equal(isSyncStalled(q, 'ctx2', t0 + 5 * SYNC_STALL_RESTART_MS), false);
+// ...but a frozen round with in-flight work still cannot hang forever (hard cap)
+assert.equal(isSyncStalled(q, 'ctx2', t0 + SYNC_STALL_HARD_RESTART_MS + 1), true, 'hard cap restarts even with work in flight');
+const h = mk();
+h.concurrencyLimiter.activeKeys.add('lost-ack');
+isSyncStalled(h, 'ctx3', t0);
+assert.equal(isSyncStalled(h, 'ctx3', t0 + SYNC_STALL_HARD_RESTART_MS + 1), true, 'leaked slot (lost ACK) is recovered by hard cap');
+h.fileSyncTasks.completed++;
+assert.equal(isSyncStalled(h, 'ctx3', t0 + SYNC_STALL_HARD_RESTART_MS + 2), false, 'progress resets the hard clock too');
 
 // A new context starts a fresh baseline
 const r = mk();
@@ -92,8 +100,27 @@ const longRunning = {
 const startedAt = now - 6 * 60 * 60 * 1000;
 checkSyncCompletion(longRunning, 1, startedAt, 'long-running');
 now += 6 * 60 * 60 * 1000;
+longRunning.fileSyncTasks.completed++; // still making progress after six hours
 checkSyncCompletion(longRunning, 1, startedAt, 'long-running');
 assert.equal(longRunning.syncState.activeSyncContext, 'long-running');
 assert.equal(longRunning.isSyncing, true);
 assert.equal(statusUpdates.length, 2, 'ongoing transfer remains visible after six hours');
+
+// Frozen counters with a leaked slot for > hard cap: the round must be reset, not left hanging.
+let cleared = 0, resets = 0;
+const frozen = {
+  ...longRunning,
+  syncState: { activeSyncContext: 'frozen', progressCheckIntervalId: 1,
+    pendingNotePushPageIndex: new Map(), pendingFilePushPageIndex: new Map(), pendingConfigPushPageIndex: new Map() },
+  concurrencyLimiter: { activeKeys: new Set(['lost-ack']), queue: [], clear: () => { cleared++; } },
+  progressTracker: { ...longRunning.progressTracker, forceComplete: noop },
+  resetSyncTasks: () => { resets++; },
+  websocket: { ws: longRunning.websocket.ws, isOpen: false },
+};
+checkSyncCompletion(frozen, 1, now, 'frozen');
+now += SYNC_STALL_HARD_RESTART_MS + 1000;
+checkSyncCompletion(frozen, 1, now, 'frozen');
+assert.equal(resets, 1, 'frozen round with leaked slot is reset');
+assert.equal(cleared, 1, 'limiter cleared on restart');
+assert.equal(frozen.syncState.activeSyncContext, null);
 console.log('sync stall watchdog tests passed');
