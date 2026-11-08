@@ -27,7 +27,8 @@ const { ConcurrencyLimiter } = load('src/lib/sync/concurrency_limiter.ts');
   const statuses = [];
   const fail = () => { throw new Error('unfinished sync must not be reset or completed'); };
   const { checkSyncCompletion } = load('src/lib/sync/operator.ts', {
-    '../../i18n/lang': { $: key => key }
+    '../../i18n/lang': { $: key => key },
+    './operator_file': { sweepStalledDownloadSessions: async () => undefined }
   }, { WebSocket: { OPEN: 1 } });
   const p = {
     syncState: { activeSyncContext: 'long-running' }, isSyncing: true,
