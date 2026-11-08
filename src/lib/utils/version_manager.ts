@@ -17,9 +17,21 @@ export class VersionManager {
     }
 
     /**
+     * 是否为 lucky 自维护构建（版本号带 -lucky 后缀，如 2.4.0-lucky.1）。
+     * 此类构建不跟随上游 release：不提示"有新版本"，也不允许一键升级，
+     * 否则 upgradePlugin 会把上游 release 包写进插件目录，覆盖掉自维护代码。
+     * Lucky self-maintained build (version carries a -lucky suffix): never offers or performs the
+     * upstream one-click upgrade, which would overwrite the plugin files with an upstream release.
+     */
+    public isLuckyBuild(): boolean {
+        return /-lucky(\.|$)/.test(this.plugin.manifest.version);
+    }
+
+    /**
      * 判断插件是否有新版本 (直接与本地当前运行的版本做实时比对)
      */
     public isPluginNew(): boolean {
+        if (this.isLuckyBuild()) return false;
         const current = this.plugin.manifest.version;
         const latest = this.plugin.localStorageManager.getMetadata("pluginVersionNewName") as string;
         return !!(latest && isVersionNew(current, latest));
@@ -161,6 +173,9 @@ export class VersionManager {
      */
     public async upgradePlugin(onProgress: (status: string) => void, signal?: AbortSignal): Promise<void> {
         const plugin = this.plugin;
+        if (this.isLuckyBuild()) {
+            throw new Error("Self-maintained (-lucky) build: upstream plugin upgrade is disabled. Replace the plugin files manually.");
+        }
         onProgress($("ui.version.upgrading_plugin"));
         dump("Starting plugin upgrade process in VersionManager...");
 
