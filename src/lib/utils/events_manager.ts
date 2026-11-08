@@ -13,6 +13,14 @@ import { $ } from "../../i18n/lang";
 export class EventManager {
   private plugin: FastSync
   private rawEventTimers: Map<string, number> = new Map()
+  // 未认证重试链：按 `事件类型:path` 去重，同一 key 只保留最新一条待重试（定时器 + 最新参数）
+  // Auth-retry chains: deduped by `eventName:path`; only the latest pending retry per key is kept
+  private authRetries: Map<string, { timer: number; startedAt: number; file: TAbstractFile; handler: (f: TAbstractFile) => void }> = new Map()
+  // 抢锁失败重新入队的代数：同 key 新事件到来后，旧链的迟到重试直接作废
+  // Lock-requeue generation per key: once a newer event arrives, a late requeue from the old chain is dropped
+  private eventGen: Map<string, number> = new Map()
+  private eventGenCounter = 0
+  private registerRetryTimer: number | null = null
   //保存待处理的重命名文件的路径，用于跳过同时触发的 modify 事件
   private pendingRenamePaths: Set<string> = new Set()
   private blurTimer: number | null = null
@@ -30,7 +38,12 @@ export class EventManager {
     if (!this.plugin.fileHashManager || !this.plugin.fileHashManager.isReady()) {
       if (attempt < 1800) {
         if (attempt === 0) dump("EventManager: fileHashManager not ready, retrying event registration")
-        window.setTimeout(() => this.registerEvents(attempt + 1), 1000)
+        // 只保留一条重试链：重复调用 registerEvents 时清掉旧定时器；stop() 会一并清除
+        if (this.registerRetryTimer) window.clearTimeout(this.registerRetryTimer)
+        this.registerRetryTimer = window.setTimeout(() => {
+          this.registerRetryTimer = null
+          this.registerEvents(attempt + 1)
+        }, 1000)
       } else {
         dump("EventManager: fileHashManager never became ready, vault watchers NOT registered")
       }
@@ -76,6 +89,13 @@ export class EventManager {
   public stop() {
     this.rawEventTimers.forEach((timer) => window.clearTimeout(timer))
     this.rawEventTimers.clear()
+    this.authRetries.forEach((entry) => window.clearTimeout(entry.timer))
+    this.authRetries.clear()
+    this.eventGen.clear()
+    if (this.registerRetryTimer) {
+      window.clearTimeout(this.registerRetryTimer)
+      this.registerRetryTimer = null
+    }
     this.pendingRenamePaths.clear()
     if (this.blurTimer) {
       window.clearTimeout(this.blurTimer)
@@ -168,26 +188,42 @@ export class EventManager {
   /**
    * WebSocket 未认证时，vault 事件不应静默丢弃——否则在断线/重连期间发生的本地修改
    * 既不上报也无墓碑记录，下一轮全量对账会把远端旧文件反向回灌，出现"删了又复活"。
-   * 这里做内存级重试：每秒重试一次、最多 10 分钟，超时仍失败才记录并放弃。
+   * 这里做内存级重试：每秒重试一次，总时长上限 10 分钟，超时仍未认证才记录并放弃。
+   * 按 `事件类型:path` 去重：同一 key 只保留一条待重试链（最新的 file/handler 覆盖旧的），
+   * 起算时间沿用该 key 第一次入队的时刻，避免反复编辑把定时器链堆成上百条。
    */
-  private retryWhenAuthed(eventName: string, file: TAbstractFile, handler: (f: TAbstractFile) => void, attempt: number) {
-    if (attempt >= 600) {
-      dump(`EventManager: ${eventName} dropped after ${attempt} retries (websocket not authed): ${file.path}`)
-      return
+  private retryWhenAuthed(eventName: string, file: TAbstractFile, handler: (f: TAbstractFile) => void) {
+    const key = `${eventName}:${file.path}`
+    const prev = this.authRetries.get(key)
+    if (prev) window.clearTimeout(prev.timer)
+    const entry = {
+      timer: 0,
+      startedAt: prev ? prev.startedAt : Date.now(),
+      file,
+      handler,
     }
-    window.setTimeout(() => {
-      if (!this.plugin.websocket || !this.plugin.websocket.isAuth) {
-        this.retryWhenAuthed(eventName, file, handler, attempt + 1)
+    const tick = () => {
+      if (this.authRetries.get(key) !== entry) return
+      if (this.plugin.websocket && this.plugin.websocket.isAuth) {
+        this.authRetries.delete(key)
+        entry.handler(entry.file)
+      } else if (Date.now() - entry.startedAt >= EventManager.AUTH_RETRY_MAX_MS) {
+        this.authRetries.delete(key)
+        dump(`EventManager: ${eventName} dropped after ${EventManager.AUTH_RETRY_MAX_MS}ms (websocket not authed): ${file.path}`)
       } else {
-        handler(file)
+        entry.timer = window.setTimeout(tick, 1000)
       }
-    }, 1000)
+    }
+    entry.timer = window.setTimeout(tick, 1000)
+    this.authRetries.set(key, entry)
   }
+
+  private static readonly AUTH_RETRY_MAX_MS = 600000
 
   private watchModify = (file: TAbstractFile, ctx?: unknown) => {
     // 检查 WebSocket 认证状态
     if (!this.plugin.websocket || !this.plugin.websocket.isAuth) {
-      this.retryWhenAuthed("modify", file, this.watchModify, 0)
+      this.retryWhenAuthed("modify", file, (f) => this.watchModify(f))
       return
     }
     if (this.plugin.settings.manualSyncEnabled || this.plugin.settings.readonlySyncEnabled) return
@@ -214,7 +250,7 @@ export class EventManager {
   private watchDelete = (file: TAbstractFile, ctx?: unknown) => {
     // 检查 WebSocket 认证状态
     if (!this.plugin.websocket || !this.plugin.websocket.isAuth) {
-      this.retryWhenAuthed("delete", file, this.watchDelete, 0)
+      this.retryWhenAuthed("delete", file, (f) => this.watchDelete(f))
       return
     }
     if (this.plugin.settings.manualSyncEnabled || this.plugin.settings.readonlySyncEnabled) return
@@ -235,7 +271,7 @@ export class EventManager {
   private watchRename = (file: TAbstractFile, oldFile: string, ctx?: unknown) => {
     // 检查 WebSocket 认证状态
     if (!this.plugin.websocket || !this.plugin.websocket.isAuth) {
-      this.retryWhenAuthed("rename", file, (f) => this.watchRename(f, oldFile), 0)
+      this.retryWhenAuthed("rename", file, (f) => this.watchRename(f, oldFile))
       return
     }
     if (this.plugin.settings.manualSyncEnabled || this.plugin.settings.readonlySyncEnabled) return
@@ -344,7 +380,10 @@ export class EventManager {
    * @param task 待执行的任务（支持 async）
    * @param delayset 额外延迟时间
    */
-  private runWithDelay(key: string, task: () => void | Promise<void>, delayset: number = 0, lockRequeue: number = 0) {
+  private runWithDelay(key: string, task: () => void | Promise<void>, delayset: number = 0, lockRequeue: number = 0, gen?: number) {
+    // 新事件（gen 未传）开启新一代；抢锁重新入队沿用原代，被更新的事件取代后即作废
+    const myGen = gen ?? ++this.eventGenCounter
+    if (gen === undefined) this.eventGen.set(key, myGen)
     // 如果已有相同 key 的定时器，先清除
     if (this.rawEventTimers.has(key)) {
       window.clearTimeout(this.rawEventTimers.get(key))
@@ -365,12 +404,21 @@ export class EventManager {
         },
         { maxRetries, retryInterval },
       ).then((result) => {
+        if (this.eventGen.get(key) !== myGen) return // 已被同 key 的更新事件取代 / superseded by a newer event
         if (result === null) {
           if (lockRequeue < 60) {
-            window.setTimeout(() => this.runWithDelay(key, task, delayset, lockRequeue + 1), 1000)
+            // 重试定时器登记进 rawEventTimers，同 key 的新事件会直接清掉它（不堆链）
+            const timer = window.setTimeout(() => {
+              this.rawEventTimers.delete(key)
+              this.runWithDelay(key, task, delayset, lockRequeue + 1, myGen)
+            }, 1000)
+            this.rawEventTimers.set(key, timer)
           } else {
+            this.eventGen.delete(key)
             dump(`EventManager: task dropped after ${lockRequeue} lock requeues: ${key}`)
           }
+        } else {
+          this.eventGen.delete(key)
         }
       })
     }
