@@ -22,6 +22,7 @@ function load(file) {
   vm.runInNewContext(code, { module, exports: module.exports, console,
     window: { setTimeout: fn => { fn(); return 1; } },
     require: id => id === 'obsidian' ? { TFile, TFolder, normalizePath: x => x.replace(/\\/g, '/') }
+      : id.includes('conflict_paths') ? { conflictStem: (p, h) => p.replace(/\.md$/, '') + '_' + h(p) }
       : id.includes('note_core_deps') ? { isAutoMerge: () => false, forgetNote: async () => {}, clearConflictState: async () => {}, conflictFilePaths: () => ({}) }
       : id.includes('helpers_obsidian_bypass') ? { ...helpers, vaultDelete: forbidden }
       : id.includes('helpers') ? { ...helpers, vaultDelete: forbidden }

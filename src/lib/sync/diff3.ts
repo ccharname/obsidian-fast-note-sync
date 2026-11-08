@@ -157,6 +157,12 @@ function applyRegion(base: string[], sideLines: string[], hunks: SideHunk[], lo:
 }
 
 const sameLines = (x: string[], y: string[]) => x.length === y.length && x.every((v, i) => v === y[i])
+/** big 中是否含有连续的 small（small 非空） */
+const containsRun = (big: string[], small: string[]) => {
+  if (small.length === 0 || small.length > big.length) return false
+  for (let i = 0; i + small.length <= big.length; i++) if (small.every((v, k) => big[i + k] === v)) return true
+  return false
+}
 
 export function diff3Merge(local: string, base: string, remote: string): Diff3Result {
   if (local === remote) return { ok: true, merged: local, notes: [] }
@@ -216,6 +222,9 @@ export function diff3Merge(local: string, base: string, remote: string): Diff3Re
         const lp = L.slice(lh[0].bStart, lh[0].bEnd)
         const rp = R.slice(rh[0].bStart, rh[0].bEnd)
         // 文件末尾（base 为空时）两侧各带一个末尾换行终止符：只保留最后一个，避免中间多出空行
+        // 一侧插入块已完整包含另一侧的插入块（典型：对端已合并过我这份）→ 只保留较大的一份，避免重复追加、两端互相重合并
+        if (containsRun(rp, lp)) { out.push(...rp); notes.push(`第 ${g.lo + 1} 行位置远端插入已包含本地插入，保留一份`); i = g.hi; continue }
+        if (containsRun(lp, rp)) { out.push(...lp); notes.push(`第 ${g.lo + 1} 行位置本地插入已包含远端插入，保留一份`); i = g.hi; continue }
         if (g.lo === B.length && lp.length > 0 && lp[lp.length - 1] === "" && rp.length > 0 && rp[rp.length - 1] === "") lp.pop()
         out.push(...lp, ...rp)
         notes.push(`两侧在第 ${g.lo + 1} 行位置各自插入了不同内容，已保留双方（本地在前、远端在后）`)

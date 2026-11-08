@@ -1,3 +1,4 @@
+import { conflictStem } from "./conflict_paths";
 import { blockAliasedRemoteMutation } from "./remote_path_guard";
 import { TFile, TAbstractFile, normalizePath } from "obsidian";
 
@@ -322,10 +323,9 @@ export const receiveNoteSyncModify = async function (data: ReceiveMessage, plugi
             try {
               const adapter = plugin.app.vault.adapter;
               const conflictDir = `${getPluginDir(plugin)}/conflict-notes`;
-              const safeName = normalizedPath.replace(/\.md$/, "").replace(/[/\\]/g, "_");
-              const pathHash = hashContent(normalizedPath);
-              const baseBackupPath = `${conflictDir}/${safeName}_${pathHash}.base.md`;
-              const remoteBackupPath = `${conflictDir}/${safeName}_${pathHash}.remote.md`;
+              const stem = conflictStem(normalizedPath, hashContent);
+              const baseBackupPath = `${conflictDir}/${stem}.base.md`;
+              const remoteBackupPath = `${conflictDir}/${stem}.remote.md`;
 
               if (!(await adapter.exists(conflictDir))) {
                 await adapter.mkdir(conflictDir);

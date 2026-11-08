@@ -82,6 +82,7 @@ export class Client {
       readNote: async (p) => self.vault.get(p) ?? null,
       casWrite: async (p, expected, next) => {
         self.casAttempts++;
+        if (self.throwCas) throw new Error('vault.process failed');
         if (self.failCas > 0) { self.failCas--; return false; }
         if (self.vault.get(p) !== expected) return false;
         self.vault.set(p, next); return true;
@@ -95,6 +96,8 @@ export class Client {
       registerConflict: async (p, info) => { self.conflicts.set(p, info); },
       clearConflict: async (p) => { self.conflicts.delete(p); },
       sendUpload: async (p, e) => {
+        if (self.gate) await self.gate;                       // 模拟 waitForSlot 的等待
+        if (e.isCurrent && !e.isCurrent()) return false;      // 与真实适配层一致：等待后登记已作废则不发送
         const data = { path: p, content: e.content, contentHash: e.contentHash, ...(e.baseHash !== null ? { baseHash: e.baseHash } : { baseHashMissing: true }), ...(e.kind === "resolved" ? { isConflictResolved: true } : {}) };
         self.sent.push(data); net.enqueue(async () => server.handle(self, "NoteModify", data)); return true;
       },

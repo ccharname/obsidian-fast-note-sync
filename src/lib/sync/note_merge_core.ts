@@ -21,7 +21,7 @@ export interface RemoteNote {
   ctime?: number
 }
 
-export type ConflictReason = "overlap" | "no-base" | "retries" | "hash-mismatch"
+export type ConflictReason = "overlap" | "no-base" | "retries" | "hash-mismatch" | "error"
 
 export interface ConflictInfo {
   /** 真 base（可信才有），无则 null */
@@ -59,7 +59,7 @@ export interface CoreDeps {
   registerConflict(path: string, info: ConflictInfo): Promise<void>
   clearConflict(path: string): Promise<void>
   /** 发送 NoteModify；返回 false 表示未能占到并发槽位 */
-  sendUpload(path: string, entry: { content: string; contentHash: string; baseHash: string | null; kind: UploadKind; context?: string }): Promise<boolean>
+  sendUpload(path: string, entry: { content: string; contentHash: string; baseHash: string | null; kind: UploadKind; context?: string; isCurrent: () => boolean }): Promise<boolean>
   sendRePush(path: string): void
   releaseSlot(path: string): void
   setPending(path: string, hash: string): void
@@ -126,14 +126,15 @@ export class NoteMergeCore {
     if (content === null) return "missing"
     const contentHash = d.hash(content)
     const baseHash = d.getSyncHash(path)
-    if (kind === "edit" && contentHash === baseHash) return "nochange"
+    // 只有「本机确认版本」可信（base 与 syncHash 一致）时才能据 hash 相等判无改动；不一致时照常上传，由服务端 CAS 把关
+    if (kind === "edit" && contentHash === baseHash && this.knownHash(path) !== null) return "nochange"
     const entry = this.tracker.begin(path, { content, contentHash, baseHash, kind, context }, d.now())
     if (!entry) {
       this.tracker.markDirty(path)
       return "queued"
     }
     d.setPending(path, contentHash)
-    const sent = await d.sendUpload(path, { content, contentHash, baseHash, kind, context })
+    const sent = await d.sendUpload(path, { content, contentHash, baseHash, kind, context, isCurrent: () => this.tracker.get(path)?.seq === entry.seq })
     if (!sent) {
       this.tracker.complete(path)
       d.clearPending(path)
@@ -150,9 +151,10 @@ export class NoteMergeCore {
       const content = await d.readNote(path)
       if (content === null) return false
       const contentHash = d.hash(content)
-      if (!this.tracker.begin(path, { content, contentHash, baseHash, kind: "resolved" }, d.now())) return false
+      const entry = this.tracker.begin(path, { content, contentHash, baseHash, kind: "resolved" }, d.now())
+      if (!entry) return false
       d.setPending(path, contentHash)
-      if (!(await d.sendUpload(path, { content, contentHash, baseHash, kind: "resolved" }))) {
+      if (!(await d.sendUpload(path, { content, contentHash, baseHash, kind: "resolved", isCurrent: () => this.tracker.get(path)?.seq === entry.seq }))) {
         this.tracker.complete(path)
         d.clearPending(path)
         return false
@@ -175,12 +177,13 @@ export class NoteMergeCore {
   onAck(path: string): Promise<boolean> {
     return this.deps.locked(path, async () => {
       const d = this.deps
-      const entry = this.tracker.complete(path)
+      const entry = this.tracker.complete(path) ?? this.tracker.takeExpired(path)
       d.releaseSlot(path)
       if (!entry) return false
       this.attempts.delete(path)
       d.clearPending(path)
-      const prevBase = await d.baseStore.get(path, entry.baseHash)
+      // 首次创建（baseHash 为空）时 Ack 之前的版本就是空文档
+      const prevBase = entry.baseHash === null ? "" : await d.baseStore.get(path, entry.baseHash)
       await this.markSyncedLocked(path, entry.content, entry.contentHash, undefined, undefined, true)
       this.recentAck.set(path, { hash: entry.contentHash, at: d.now(), prevBase })
       await this.drainLocked(path)
@@ -252,6 +255,21 @@ export class NoteMergeCore {
    *   相同 → 确认；本地未分叉 → 快进；分叉 → diff3（有可信 base）否则进冲突 UI。
    */
   private async reconcileLocked(path: string, remote: RemoteNote, o: { serverBase?: string | null }): Promise<RemoteOutcome> {
+    try {
+      return await this.reconcileInner(path, remote, o)
+    } catch (e) {
+      // 自动合并过程抛异常（读写盘失败等）：降级为人工冲突流程，保留双方内容，绝不直接放弃
+      const d = this.deps
+      d.log("NoteAutoMerge", `自动合并出错，转人工处理: ${e instanceof Error ? e.message : String(e)}`, "error", path)
+      let local = ""
+      try { local = (await d.readNote(path)) ?? "" } catch { /* 读不到则空 */ }
+      await d.registerConflict(path, { base: null, local, remote: remote.content, serverHash: remote.contentHash, reason: "error" })
+      this.attempts.delete(path)
+      return "conflict"
+    }
+  }
+
+  private async reconcileInner(path: string, remote: RemoteNote, o: { serverBase?: string | null }): Promise<RemoteOutcome> {
     const d = this.deps
     const trusted = d.hash(remote.content) === remote.contentHash
     const local = await d.readNote(path)
@@ -272,19 +290,27 @@ export class NoteMergeCore {
       return "confirmed"
     }
 
-    const diverged = known === null || localHash !== known
+    let diverged = known === null || localHash !== known
+    // Ack 窗口内收到他端不同内容：服务端 CAS 非原子窗口下两端都被接受，本机刚确认的版本已被后写覆盖。
+    // 此时 syncHash 已前进到本地内容，不能当「未分叉」快进（双方会互相覆盖成对方的文本且都不报冲突），
+    // 必须按「以 Ack 前的版本为 base 的真分叉」处理：能合并就合并并上传，不能合并进冲突流程。
+    let ackBase: string | null | undefined
     if (!diverged) {
       const ra = this.recentAck.get(path)
       if (ra && ra.hash === localHash && d.now() - ra.at < RECENT_ACK_WINDOW_MS) {
-        // 刚 Ack 完又收到他端不同内容：可能是服务端 CAS 非原子窗口导致后写覆盖。
-        // 若远端已完整包含我这份改动则无损，否则先留一份副本再快进。
         let contained = false
         if (ra.prevBase !== null) {
           const r = diff3Merge(local, ra.prevBase, remote.content)
           contained = r.ok && r.merged === remote.content
+          // 对端是以「它自己在前」合并出的结果（同点插入顺序与我相反）也算已包含，否则两端各自按己方在前互相重合并，永不收敛
+          if (!contained) { const r2 = diff3Merge(remote.content, ra.prevBase, local); contained = r2.ok && r2.merged === remote.content }
+          // 首次创建（空 base）时两侧都是「插入」，diff3 会保留双方；远端若只是在我这份之后追加，同样算已包含
+          if (!contained && ra.prevBase === "" && remote.content.startsWith(local)) contained = true
         }
-        if (!contained) await d.saveLost(path, local, "ack-window")
+        if (!contained) { diverged = true; ackBase = ra.prevBase }
       }
+    }
+    if (!diverged) {
       if (!(await d.casWrite(path, local, remote.content, opts))) {
         this.scheduleRetry(path, remote)
         return "deferred"
@@ -300,7 +326,7 @@ export class NoteMergeCore {
       await d.registerConflict(path, { base: null, local, remote: remote.content, serverHash: remote.contentHash, reason: "hash-mismatch" })
       return "conflict"
     }
-    let base = await d.baseStore.get(path, known)
+    let base = ackBase !== undefined ? ackBase : await d.baseStore.get(path, known)
     if (base === null && known !== null && o.serverBase && d.hash(o.serverBase) === known) base = o.serverBase
     if (base === null) {
       d.log("NoteMergeNoBase", "本地无可信 base（升级前已分叉或从未种子），转人工冲突处理", "success", path)

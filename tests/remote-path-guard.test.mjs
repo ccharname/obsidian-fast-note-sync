@@ -31,6 +31,7 @@ function load(name) {
     require(id) {
       if (id === "obsidian") return { TFile, TFolder, normalizePath, Platform: { isMobile: false } };
       if (id === "./remote_path_guard") return load("remote_path_guard");
+      if (id === "./conflict_paths") return { conflictStem: (p, h) => p + "_" + h(p) };
       if (id === "./note_core_deps") return { isAutoMerge: () => false, forgetNote: async () => {}, clearConflictState: async () => {}, conflictFilePaths: () => ({}) };
       if (id === "./sync_log_manager") return { SyncLogManager: logger };
       if (id === "../utils/helpers") return helpers;

@@ -1,3 +1,4 @@
+import { conflictStem } from "./conflict_paths";
 import { moment, Platform, normalizePath } from "obsidian";
 
 import { handleFileChunkDownload, BINARY_PREFIX_FILE_SYNC, clearUploadQueue, receiveFileUploadSessionNotFound } from "./operator_file";
@@ -653,10 +654,9 @@ export class WebSocketManager {
           await adapter.mkdir(conflictDir);
         }
 
-        const safeName = path.replace(/\.md$/, "").replace(/[/\\]/g, "_");
-        const pathHash = hashContent(path);
-        const baseBackupPath = `${conflictDir}/${safeName}_${pathHash}.base.md`;
-        const remoteBackupPath = `${conflictDir}/${safeName}_${pathHash}.remote.md`;
+        const stem = conflictStem(path, hashContent);
+        const baseBackupPath = `${conflictDir}/${stem}.base.md`;
+        const remoteBackupPath = `${conflictDir}/${stem}.remote.md`;
 
         await adapter.write(baseBackupPath, baseContent);
         await adapter.write(remoteBackupPath, serverContent);

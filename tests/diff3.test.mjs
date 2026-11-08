@@ -156,4 +156,8 @@ ok("brand new\ndoc\n", BASE, BASE, "brand new\ndoc\n", "whole replace one side o
   console.log(`  fuzz: ${merged} merged, ${conflicts} conflicts`);
   assert.ok(merged > 50);
 }
+// 同点插入：一侧插入块已完整包含另一侧 → 只保留一份（对端已合并过我这份时不得重复追加）
+ok("a\nX\n", "a\n", "a\nY\nX\n", "a\nY\nX\n", "same-point insert: remote block contains local");
+ok("a\nY\nX\n", "a\n", "a\nX\n", "a\nY\nX\n", "same-point insert: local block contains remote");
+ok("a\nX\n", "a\n", "a\nY\n", "a\nX\nY\n", "same-point insert: unrelated keeps both, local first");
 console.log("diff3.test.mjs: all scenarios passed");

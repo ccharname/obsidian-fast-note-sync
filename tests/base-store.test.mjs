@@ -157,4 +157,26 @@ const mk = (adapter, opts = {}) => new BaseStore({ adapter, dir: "plug/base", ha
   assert.equal(c("NoteModifyAck", undefined, "R1", false), "discard", "off mode keeps upstream behaviour");
   assert.equal(c("NoteModifyAck", undefined, null), "process");
 }
+// review r3#6：新建 base 时选文件名不能全量遍历 index（冷启动种子会变成 O(n^2)）
+{
+  const s = mk(memAdapter(), { limits: { maxNotes: 100000, maxTotalChars: 1e12 } });
+  await s.load();
+  const t0 = Date.now();
+  for (let i = 0; i < 20000; i++) await s.put(`n/${i}.md`, "x", hashContent("x"));
+  const ms = Date.now() - t0;
+  console.log(`  20000 new bases: ${ms}ms`);
+  assert.ok(ms < 2500, `20000 puts took ${ms}ms (quadratic file-name selection?)`);
+}
+// review r3#1：忽略窗口引用计数；r3#5：冲突备份文件名不含非法字符
+{
+  const { IgnoreRefs, conflictStem } = loadTs("src/lib/sync/conflict_paths.ts");
+  const r = new IgnoreRefs();
+  r.acquire("a.md"); r.acquire("a.md");
+  assert.equal(r.release("a.md"), false, "first timer must not unignore while a second write is still in its window");
+  assert.equal(r.release("a.md"), true);
+  assert.equal(r.release("a.md"), true, "unbalanced release is harmless");
+  const stem = conflictStem('dir/we?ird*na:me"<x>|.md', hashContent);
+  assert.ok(!/[\\/:*?"<>|]/.test(stem), stem);
+  assert.equal(conflictStem("a/b.md", hashContent), `a_b_${hashContent("a/b.md")}`, "legacy-compatible for ordinary paths");
+}
 console.log("base-store.test.mjs: all scenarios passed");

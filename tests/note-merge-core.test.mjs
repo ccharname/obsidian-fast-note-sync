@@ -5,7 +5,7 @@ import { Net, Server, Client } from "./lib/sim.mjs";
 const BASE = "# T\n\n## a\n- 1\n- 2\n\n## b\n- x\n\n## c\n- todo\n";
 const P = "n.md";
 let cases = 0;
-const t = async (name, fn) => { await fn(); cases++; console.log("  ok -", name); };
+const t = async (name, fn) => { if (process.env.ONLY && !name.includes(process.env.ONLY)) return; await fn(); cases++; console.log("  ok -", name); };
 function world(n = 2) {
   const net = new Net(), server = new Server(net);
   const cs = Array.from({ length: n }, (_, i) => new Client("ABCDEF"[i], net, server));
@@ -172,15 +172,31 @@ await t("localStorage 丢失（syncHash 被按本地内容重建）：base 文�
   assert.equal(B.conflicts.get(P)?.reason, "no-base");
 });
 
-await t("CAS 非原子窗口：两端同时通过 CAS，后写覆盖；A 在 Ack 窗口内收到他端推送 → 先存 lost 副本再快进", async () => {
+await t("CAS 非原子窗口：两端同时通过 CAS（不同位置）；Ack 窗口内收到他端推送 → 按真分叉 diff3 合并，双方改动都保留并收敛", async () => {
   const { net, server, cs: [A, B] } = await seeded();
   server.atomic = false;
   const pa = A.edit(P, (c) => c.replace("- 1", "- A-edit"));
   const pb = B.edit(P, (c) => c.replace("- todo", "- B-edit"));
   await pa; await pb; await net.settle();
-  assert.equal(A.lost.length + B.lost.length >= 1, true, "one side saved a lost copy");
-  const loser = A.lost.length ? A : B;
-  assert.ok(loser.lost[0].content.includes(loser === A ? "A-edit" : "B-edit"), "lost copy holds the overwritten content");
+  const s = converged({ server, cs: [A, B] });
+  assert.ok(s.includes("A-edit") && s.includes("B-edit"), "both edits kept");
+  assert.equal(A.conflicts.size + B.conflicts.size, 0);
+  await consistent({ server, cs: [A, B] });
+});
+
+await t("P0 非原子窗口 + 同行并发编辑：两端各自 Ack 后互相收到对方推送，不得静默互换内容（至少一端进冲突或两端一致）", async () => {
+  const { net, server, cs: [A, B] } = await seeded();
+  server.atomic = false;
+  const pa = A.edit(P, (c) => c.replace("- todo", "- newmac"));
+  const pb = B.edit(P, (c) => c.replace("- todo", "- oldmac"));
+  await pa; await pb; await net.settle();
+  const a = A.vault.get(P), b = B.vault.get(P);
+  const flagged = A.conflicts.has(P) || B.conflicts.has(P);
+  assert.ok(a === b || flagged, `silent divergence: A=${JSON.stringify(a.slice(-12))} B=${JSON.stringify(b.slice(-12))}`);
+  if (a === b) assert.equal(a, server.notes.get(P).content);
+  // 无论怎样，两段文本都不能丢（要么在文件里，要么在冲突信息 / lost 副本里）
+  const all = [a, b, ...[A, B].flatMap((c) => [c.conflicts.get(P)?.local, c.conflicts.get(P)?.remote, ...c.lost.map((l) => l.content)])].join("\n");
+  assert.ok(all.includes("newmac") && all.includes("oldmac"), "no text lost");
 });
 
 await t("远端推送在本机上传在途时被推迟，Ack 后再处理（不改写在途 base）", async () => {
@@ -270,6 +286,74 @@ await t("sweep：在途上传超时后释放（迟到 Ack 视为无登记）", a
   net.now = 1000 + 31000;
   A.core.sweep();
   assert.equal(A.core.tracker.has(P), false);
+});
+
+// ---------------- 二审（qwen3.7-max）逐条回归 ----------------
+await t("review r1#1 base 与 syncHash 不一致且本地恰等于 syncHash：不得判 nochange 跳过上传", async () => {
+  const { net, server, cs: [B] } = await seeded(1);
+  B.vault.set(P, BASE.replace("# T", "# TT"));
+  B.sync.set(P, hashContent(B.vault.get(P)));                    // localStorage 丢失后按本地重建
+  assert.equal(await B.core.requestUpload(P, { kind: "edit" }), "sent", "must upload instead of silently skipping");
+  await net.settle();
+  assert.ok(B.sent.length >= 1);
+  assert.ok(!server.notes.get(P).content.includes("# TT"), "CAS must not let it overwrite (server differs from rebuilt hash)");
+  assert.equal(B.conflicts.get(P)?.reason, "no-base", "falls to manual flow rather than staying silently unsynced");
+});
+
+await t("review r1#2 远端内容 hash 不符且本地无文件：落地内容但不死锁，后续编辑可正常上传", async () => {
+  const { net, server, cs: [A] } = world(1);
+  server.put(P, "server text");
+  server.notes.get(P).hash = "999";                              // 服务端存的 hash 与内容不符
+  await A.core.onRemote({ path: P, content: "server text", contentHash: "999" });
+  assert.equal(A.vault.get(P), "server text");
+  await A.edit(P, (c) => c + " more"); await net.settle();
+  assert.equal(server.notes.get(P).content, "server text more", "upload with claimed hash as baseHash passes CAS: self-heals");
+});
+
+await t("review r1#3 首次上传（无 base）Ack 后收到他端基于它的推送：不产生冗余 lost 副本", async () => {
+  const { net, server, cs: [A, B] } = world(2);
+  const NN = "new note\n";
+  A.vault.set("new.md", NN);
+  await A.core.requestUpload("new.md", { kind: "edit" }); await net.settle();
+  assert.equal(B.vault.get("new.md"), NN, "B received the new note via broadcast");
+  await B.edit("new.md", (c) => c + "more\n"); await net.settle();
+  assert.equal(A.vault.get("new.md"), NN + "more\n");
+  assert.equal(A.lost.length, 0, "legit descendant must not be saved as lost");
+});
+
+await t("review r1#5 超时释放后迟到的 Ack：仍对应该请求，syncHash/base 前进", async () => {
+  const { net, server, cs: [A] } = await seeded(1);
+  net.now = 1000;
+  await A.edit(P, (c) => c + "- late\n");
+  net.now = 1000 + 31000;
+  A.core.sweep();
+  assert.equal(A.core.tracker.has(P), false);
+  await net.settle();
+  await consistent({ server, cs: [A] });
+});
+
+await t("review r3#2 等待并发槽位期间笔记被删除：不得再发 NoteModify（否则服务端复活幽灵文件）", async () => {
+  const { net, server, cs: [A] } = await seeded(1);
+  let open; A.gate = new Promise((r) => (open = r));
+  const p = A.edit(P, (c) => c + "- x\n");
+  await new Promise((r) => setImmediate(r));
+  A.vault.delete(P); A.core.forget(P);                             // 删除 → forgetNote → core.forget
+  open(); await p; await net.settle();
+  assert.equal(A.sent.length, 0, "no NoteModify after delete");
+});
+
+await t("review r4#2 自动合并抛异常：降级为人工冲突（写冲突记录、本地不动），不能直接放弃", async () => {
+  const { net, server, cs: [A, B] } = await seeded();
+  B.throwCas = true;
+  const pa = A.edit(P, (c) => c + "- A tail\n");
+  const pb = B.edit(P, (c) => c.replace("# T", "# TT"));
+  await pa; await pb; await net.settle();
+  const info = B.conflicts.get(P);
+  assert.ok(info, "conflict registered via manual flow");
+  assert.equal(info.reason, "error");
+  assert.equal(info.remote, A.vault.get(P), "remote content preserved for the dialog");
+  assert.ok(info.serverHash);
+  assert.ok(B.vault.get(P).includes("# TT"), "local untouched");
 });
 
 console.log(`note-merge-core.test.mjs: ${cases} scenarios passed`);

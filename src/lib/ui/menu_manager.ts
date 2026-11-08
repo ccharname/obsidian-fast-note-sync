@@ -1,3 +1,4 @@
+import { conflictStem } from "../sync/conflict_paths";
 import { readConflictMeta } from "../sync/note_core_deps";
 import { Menu, MenuItem, setIcon, Platform, WorkspaceLeaf, normalizePath, Notice } from 'obsidian';
 
@@ -776,11 +777,10 @@ export class MenuManager {
 
     try {
       const adapter = this.plugin.app.vault.adapter;
-      const safeName = normalizedPath.replace(/\.md$/, "").replace(/[/\\]/g, "_");
-      const pathHash = hashContent(normalizedPath);
+      const stem = conflictStem(normalizedPath, hashContent);
       const conflictDir = `${getPluginDir(this.plugin)}/conflict-notes`;
-      const baseBackupPath = `${conflictDir}/${safeName}_${pathHash}.base.md`;
-      const remoteBackupPath = `${conflictDir}/${safeName}_${pathHash}.remote.md`;
+      const baseBackupPath = `${conflictDir}/${stem}.base.md`;
+      const remoteBackupPath = `${conflictDir}/${stem}.remote.md`;
 
       let baseContent = "";
       let serverContent = "";

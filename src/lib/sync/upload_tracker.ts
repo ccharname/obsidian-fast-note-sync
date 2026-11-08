@@ -22,6 +22,8 @@ export interface UploadEntry {
 export class UploadTracker {
   private entries = new Map<string, UploadEntry>()
   private dirty = new Set<string>()
+  /** 超时释放的请求：单飞下该路径不会有第二个在途请求，其迟到的 Ack 仍可对应到它 */
+  private expired = new Map<string, UploadEntry>()
   private seq = 0
 
   has(path: string): boolean {
@@ -43,6 +45,7 @@ export class UploadTracker {
   /** 登记在途请求；该路径已有在途则返回 null（调用方应 markDirty） */
   begin(path: string, e: Omit<UploadEntry, "seq" | "path" | "sentAt">, now: number): UploadEntry | null {
     if (this.entries.has(path)) return null
+    this.expired.delete(path)
     const entry: UploadEntry = { ...e, seq: ++this.seq, path, sentAt: now }
     this.entries.set(path, entry)
     return entry
@@ -52,6 +55,13 @@ export class UploadTracker {
   complete(path: string): UploadEntry | undefined {
     const e = this.entries.get(path)
     if (e) this.entries.delete(path)
+    return e
+  }
+
+  /** 迟到 Ack：取回该路径超时释放的请求（一次性） */
+  takeExpired(path: string): UploadEntry | undefined {
+    const e = this.expired.get(path)
+    if (e) this.expired.delete(path)
     return e
   }
 
@@ -75,6 +85,7 @@ export class UploadTracker {
       if (now - e.sentAt >= timeoutMs) {
         out.push(e)
         this.entries.delete(p)
+        this.expired.set(p, e)
       }
     }
     return out
@@ -91,5 +102,6 @@ export class UploadTracker {
   forget(path: string): void {
     this.entries.delete(path)
     this.dirty.delete(path)
+    this.expired.delete(path)
   }
 }

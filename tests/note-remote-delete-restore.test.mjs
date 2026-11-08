@@ -14,6 +14,7 @@ function load(file) {
   const code = ts.transpileModule(fs.readFileSync(file, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
   vm.runInNewContext(code, { module, exports: module.exports, console, window: { setTimeout: (fn) => { timers.push(fn); return 1; } },
     require: (id) => id === "obsidian" ? { TFile, normalizePath: (x) => x }
+      : id.includes("conflict_paths") ? { conflictStem: (p, h) => p + "_" + h(p) }
       : id.includes("note_core_deps") ? { isAutoMerge: () => false, forgetNote: async () => {}, clearConflictState: async () => {} }
       : id.includes("helpers") ? helpers
       : id.includes("remote_path_guard") ? { blockAliasedRemoteMutation: () => false }

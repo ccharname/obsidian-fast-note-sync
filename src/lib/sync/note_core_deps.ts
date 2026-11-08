@@ -6,6 +6,7 @@ import type FastSync from "../../main"
 import { hashContent, getPluginDir, getSafeCtime, dump, dumpError } from "../utils/helpers"
 import { SyncLogManager } from "./sync_log_manager"
 import { BaseStore } from "../storage/base_store"
+import { IgnoreRefs, conflictStem } from "./conflict_paths"
 import { NoteMergeCore, type CoreDeps, type ConflictInfo } from "./note_merge_core"
 import { $ } from "../../i18n/lang"
 
@@ -15,7 +16,7 @@ export const isAutoMerge = (plugin: FastSync): boolean => plugin.settings.confli
 
 export function conflictFilePaths(plugin: FastSync, path: string) {
   const dir = `${getPluginDir(plugin)}/conflict-notes`
-  const stem = `${normalizePath(path).replace(/\.md$/, "").replace(/[/\\]/g, "_")}_${hashContent(normalizePath(path))}`
+  const stem = conflictStem(normalizePath(path), hashContent)
   return { dir, base: `${dir}/${stem}.base.md`, remote: `${dir}/${stem}.remote.md`, meta: `${dir}/${stem}.meta.json` }
 }
 
@@ -71,9 +72,10 @@ export function createNoteCore(plugin: FastSync): NoteMergeCore {
   const vault = plugin.app.vault
   const pluginDir = () => getPluginDir(plugin)
 
+  const ignoreRefs = new IgnoreRefs()
   const unignoreLater = (path: string, written: string | null) => {
     window.setTimeout(() => {
-      plugin.removeIgnoredFile(path)
+      if (ignoreRefs.release(path)) plugin.removeIgnoredFile(path)
       if (written === null) return
       // 忽略窗口内用户的编辑事件被丢弃了：若磁盘内容已不是刚写入的内容，补发一次上传
       const f = vault.getFileByPath(path)
@@ -109,6 +111,7 @@ export function createNoteCore(plugin: FastSync): NoteMergeCore {
       const f = vault.getFileByPath(normalizePath(path))
       if (!f) return false
       plugin.addIgnoredFile(f.path)
+      ignoreRefs.acquire(f.path)
       let ok = false
       try {
         await vault.process(f, (cur) => {
@@ -134,6 +137,7 @@ export function createNoteCore(plugin: FastSync): NoteMergeCore {
         }
       }
       plugin.addIgnoredFile(np)
+      ignoreRefs.acquire(np)
       try {
         await vault.create(np, content, opts)
       } finally {
@@ -195,8 +199,13 @@ export function createNoteCore(plugin: FastSync): NoteMergeCore {
         ...(e.baseHash !== null ? { baseHash: e.baseHash } : { baseHashMissing: true }),
         ...(e.kind === "resolved" ? { isConflictResolved: true } : {}),
       }
-      plugin.pendingNoteDeleteAcks.delete(f.path)
       if (!(await plugin.concurrencyLimiter.waitForSlot(f.path))) return false
+      // 等槽位期间笔记可能已被删除/重命名（登记已作废）：此时发出 NoteModify 会让服务端复活幽灵文件
+      if (!e.isCurrent() || !vault.getFileByPath(normalizePath(path))) {
+        plugin.concurrencyLimiter.releaseSlot(f.path)
+        return false
+      }
+      plugin.pendingNoteDeleteAcks.delete(f.path)
       void plugin.websocket.SendMessage("NoteModify", data, undefined, undefined, e.context)
       dump(`Note modify send (auto-merge)`, data.path, data.contentHash, data.mtime, e.baseHash)
       return true
@@ -217,7 +226,7 @@ export function createNoteCore(plugin: FastSync): NoteMergeCore {
         const a = vault.adapter
         const dir = `${pluginDir()}/${LOST_DIR}`
         if (!(await a.exists(dir))) await a.mkdir(dir)
-        const stem = `${normalizePath(path).replace(/\.md$/, "").replace(/[/\\]/g, "_")}_${hashContent(path)}`
+        const stem = conflictStem(normalizePath(path), hashContent)
         await a.write(`${dir}/${stem}.${Date.now()}.${why}.md`, content)
         const files = (await a.list(dir)).files.sort()
         for (const old of files.slice(0, Math.max(0, files.length - LOST_KEEP))) await a.remove(old)

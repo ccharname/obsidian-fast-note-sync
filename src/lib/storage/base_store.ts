@@ -69,6 +69,8 @@ export class BaseStore {
   private log: (msg: string, ...args: unknown[]) => void
   private index = new Map<string, IndexEntry>()
   private totalChars = 0
+  /** 已占用的文件名（增量维护，避免选名时全量遍历 index） */
+  private usedFiles = new Set<string>()
   private loaded = false
   private chain: Promise<unknown> = Promise.resolve()
   private indexDirty = false
@@ -98,6 +100,7 @@ export class BaseStore {
   async load(): Promise<void> {
     await this.serial(async () => {
       this.index.clear()
+      this.usedFiles.clear()
       this.totalChars = 0
       try {
         if (await this.adapter.exists(this.indexPath)) {
@@ -105,6 +108,7 @@ export class BaseStore {
           for (const [p, e] of Object.entries(raw)) {
             if (e && typeof e.file === "string" && typeof e.hash === "string" && typeof e.size === "number") {
               this.index.set(p, { file: e.file, hash: e.hash, size: e.size, lines: e.lines ?? 0, lastUsed: e.lastUsed ?? 0 })
+              this.usedFiles.add(e.file)
               this.totalChars += e.size
             }
           }
@@ -112,6 +116,7 @@ export class BaseStore {
       } catch (e) {
         this.log("[BaseStore] index 损坏，按空库处理", e)
         this.index.clear()
+        this.usedFiles.clear()
         this.totalChars = 0
       }
       this.loaded = true
@@ -185,6 +190,7 @@ export class BaseStore {
       }
       if (old) this.totalChars -= old.size
       this.index.set(path, { file, hash, size: content.length, lines: countLines(content), lastUsed: this.now() })
+      this.usedFiles.add(file)
       this.totalChars += content.length
       await this.evictLocked(path)
       this.scheduleFlush()
@@ -209,6 +215,7 @@ export class BaseStore {
         const file = this.pickFileName(newPath)
         await this.adapter.write(`${this.dir}/${file}`, JSON.stringify({ path: newPath, hash: f.hash, content: f.content } as BaseFile))
         this.index.set(newPath, { ...e, file, lastUsed: this.now() })
+        this.usedFiles.add(file)
         this.totalChars += e.size
         await this.dropLocked(oldPath)
         this.scheduleFlush()
@@ -254,9 +261,7 @@ export class BaseStore {
     const stem = this.hash(path)
     let name = `${stem}.base`
     let n = 0
-    const used = new Set<string>()
-    for (const [p, e] of this.index) if (p !== path) used.add(e.file)
-    while (used.has(name)) name = `${stem}-${++n}.base`
+    while (this.usedFiles.has(name)) name = `${stem}-${++n}.base`
     return name
   }
 
@@ -264,6 +269,7 @@ export class BaseStore {
     const e = this.index.get(path)
     if (!e) return false
     this.index.delete(path)
+    this.usedFiles.delete(e.file)
     this.totalChars -= e.size
     this.indexDirty = true
     try {
