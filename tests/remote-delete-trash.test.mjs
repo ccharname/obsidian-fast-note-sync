@@ -10,6 +10,7 @@ const helpers = { dump: noop, dumpError: noop, isPathExcluded: () => false,
   isFolderSyncPathExcluded: () => false, configIsPathExcluded: () => false,
   isPathInConfigSyncDirs: () => true, waitForFolderEmpty: async () => true,
   checkAndNotifyCaseConflict: () => false, isLargeBinarySyncRisk: () => false };
+let guardModule; // #291 路径别名 guard 用真实实现 / real #291 alias guard
 let permanentCalls = 0;
 const forbidden = () => { permanentCalls++; throw new Error('permanent deletion must not be used'); };
 function load(file) {
@@ -22,6 +23,7 @@ function load(file) {
     require: id => id === 'obsidian' ? { TFile, TFolder, normalizePath: x => x.replace(/\\/g, '/') }
       : id.includes('helpers_obsidian_bypass') ? { ...helpers, vaultDelete: forbidden }
       : id.includes('helpers') ? { ...helpers, vaultDelete: forbidden }
+      : id.includes('remote_path_guard') ? (guardModule ??= load('src/lib/sync/remote_path_guard.ts'))
       : id.includes('sync_log_manager') ? { SyncLogManager: { getInstance: () => ({ addLog: noop }) } }
       : {} });
   return module.exports;
