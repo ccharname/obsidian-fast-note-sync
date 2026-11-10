@@ -68,7 +68,7 @@ export interface MergeEnv {
   /** 清 base；带 rev 时留下路径墓碑（拒绝 rev ≤ 墓碑的迟到消息） */
   clearBase(path: string, rev?: number): void;
   /** 发送边界：只读 / 同步关闭时为 false，状态机任何写请求都不发 */
-  canSend?(): boolean;
+  canSend?(path?: string): boolean;
   /** 发送 NoteModify（serverMerge:true）；返回 false 表示未真正发出 */
   sendModify(op: ModifyOp): Promise<boolean>;
   log?(msg: string): void;
@@ -122,6 +122,8 @@ interface Inflight {
   resend?: () => Promise<boolean>;
   cancel?: () => void;
   slotHeld?: boolean;
+  /** 等槽/读取期间，同 rev 分页可升级已有占位而不再排一次正文。 */
+  force?: boolean;
 }
 
 /** 主动超时：在途超过该时长无 Ack 即重发；之后指数退避，上限 5 分钟，带 jitter */
@@ -166,7 +168,9 @@ export class ServerMergeClient {
   hasPendingWork(path?: string): boolean {
     if (path !== undefined) return this.inflight.has(path) || this.dirty.has(path)
       || this.deferred.has(path) || this.busy.has(path);
-    return this.inflight.size + this.dirty.size + this.deferred.size + this.busy.size > 0;
+    // 暂停的路径仍留在状态机/持久恢复表，不能阻塞当前允许同步的轮次。
+    return [this.inflight, this.dirty, this.deferred, this.busy].some(entries =>
+      [...entries.keys()].some(p => !this.env.canSend || this.env.canSend(p)));
   }
 
   /** 断线 / 会话结束：在途与脏标记作废（opId 保留以便同内容重试沿用） */
@@ -248,7 +252,7 @@ export class ServerMergeClient {
     this.retries.set(path, (this.retries.get(path) ?? 0) + 1);
     this.env.log?.(`No Ack, resend same opId: ${path} ${entry.opId}`);
     try {
-      if (!this.env.canSend || this.env.canSend()) await entry.resend();
+      if (!this.env.canSend || this.env.canSend(path)) await entry.resend();
     } catch (e) {
       this.env.log?.(`resend failed: ${path} ${String(e)}`);
     }
@@ -339,7 +343,7 @@ export class ServerMergeClient {
    */
   async requestUpload(path: string, content: string, hash: string, force = false): Promise<UploadResult> {
     if (force) this.env.markUploadPending?.(path);
-    if (this.env.canSend && !this.env.canSend()) return "blocked";
+    if (this.env.canSend && !this.env.canSend(path)) return "blocked";
     if (this.inflight.has(path) || this.busy.has(path)) {
       this.markDirty(path, force);
       return "dirty";
@@ -401,7 +405,7 @@ export class ServerMergeClient {
    */
   async requestUploadFromDisk(path: string, force = false): Promise<UploadResult> {
     if (force) this.env.markUploadPending?.(path);
-    if (this.env.canSend && !this.env.canSend()) return "blocked";
+    if (this.env.canSend && !this.env.canSend(path)) return "blocked";
     if (this.inflight.has(path) || this.busy.has(path)) {
       this.markDirty(path, force);
       return "dirty";
@@ -411,7 +415,7 @@ export class ServerMergeClient {
       this.defer(path, force);
       return "deferred";
     }
-    const entry: Inflight = { kind: "modify", opId: this.env.newOpId(), since: this.env.now(), content: "", hash: "", sha: "" };
+    const entry: Inflight = { kind: "modify", opId: this.env.newOpId(), since: this.env.now(), content: "", hash: "", sha: "", force };
     this.inflight.set(path, entry);
     const free = (): void => {
       if (this.inflight.get(path) === entry) this.release(path);
@@ -439,6 +443,7 @@ export class ServerMergeClient {
         this.env.releaseSlot?.(path);
         return "failed";
       }
+      force = force || entry.force === true;
       const pre = this.precheck(path, hash, sha, force);
       if (pre) {
         free();
@@ -501,7 +506,7 @@ export class ServerMergeClient {
    * send 回调拿到 opId 与 base，负责真正发消息。
    */
   async requestDelete(path: string, send: (opId: string, baseSha: string | null, isResend: boolean) => Promise<boolean>): Promise<boolean> {
-    if (this.env.canSend && !this.env.canSend()) return false;
+    if (this.env.canSend && !this.env.canSend(path)) return false;
     this.markBusy(path);
     this.forget(path);
     let entry: Inflight;
@@ -528,7 +533,7 @@ export class ServerMergeClient {
 
   /** 重命名请求：只移动不合并；等源与目标路径在途操作结束；Ack 路径 = 新路径。源路径的 dirty 迁移到新路径 */
   async requestRename(oldPath: string, newPath: string, hash: string, send: (opId: string, baseSha: string | null, isResend: boolean) => Promise<boolean>): Promise<boolean> {
-    if (this.env.canSend && !this.env.canSend()) return false;
+    if (this.env.canSend && (!this.env.canSend(oldPath) || !this.env.canSend(newPath))) return false;
     this.markBusy(oldPath, newPath);
     for (const path of [oldPath, newPath]) {
       if (this.deferred.has(path)) this.markDirty(newPath, this.deferred.get(path));
@@ -729,7 +734,10 @@ export class ServerMergeClient {
     return this.chain(p, async (): Promise<PushResult> => {
       const base = this.env.getBase(p);
       if (rev === base.rev && this.env.hasPendingUpload?.(p)) {
-        void this.requestUploadFromDisk(p, true);
+        const queued = this.inflight.get(p);
+        if (queued?.kind === "modify" && !queued.sha) queued.force = true;
+        else if (this.deferred.has(p)) this.defer(p, true);
+        else if (!this.hasPendingWork(p) || this.busy.has(p)) void this.requestUploadFromDisk(p, true);
         return "upload";
       }
       if (rev <= base.rev) return "dropped";
@@ -753,7 +761,8 @@ export class ServerMergeClient {
       }
       // 本地有未上传改动：不应用，立即上传（服务端三方合并）；只读 / 发送被拦时只丢弃，不发写请求。
       // 走先取槽再读全文的路径（不占着正文等槽），占位同步登记；不在 chain 里等槽，免得堵住该路径的 Ack 处理
-      if (this.env.canSend && !this.env.canSend()) return "dropped";
+      this.env.markUploadPending?.(p);
+      if (this.env.canSend && !this.env.canSend(p)) return "dropped";
       void this.requestUploadFromDisk(p);
       return "upload";
     });

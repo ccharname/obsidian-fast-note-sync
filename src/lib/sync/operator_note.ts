@@ -328,7 +328,16 @@ export const receiveNoteSyncModify = async function (data: ReceiveMessage, plugi
             plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies);
             return;
           }
-          const hasPendingLocalEdit = plugin.pendingNoteModifies.has(data.path)
+          // 旧协议取消后可能留下纯扫描标记；正文仍等于可信 base 时不应制造远端冲突备份。
+          // 真正偏离 base 的未确认草稿仍保留恢复入口。
+          const baseShaNow = plugin.fileHashManager.getPathSha?.(normalizedPath)
+          if (plugin.pendingNoteModifies.has(normalizedPath) && baseHashNow !== null
+            && localContentHashNow === baseHashNow
+            && (!baseShaNow || await plugin.serverMerge.env?.sha(await plugin.app.vault.read(file)) === baseShaNow)) {
+            plugin.pendingNoteModifies.delete(normalizedPath)
+            plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
+          }
+          const hasPendingLocalEdit = plugin.pendingNoteModifies.has(normalizedPath)
           let hasDivergedSinceLastSync = false
           if (!hasPendingLocalEdit) {
             const knownSyncMtime = plugin.lastSyncMtime.get(data.path)
@@ -667,20 +676,26 @@ export function abortNoteSyncRound(plugin: FastSync): void {
 }
 
 export function hasPendingNoteUploads(plugin: FastSync): boolean {
-  return !!plugin.serverMerge?.supported && ((plugin.pendingNoteModifies?.size ?? 0) > 0
-    || !!plugin.serverMerge.hasPendingWork?.())
+  if (!plugin.serverMerge?.supported || plugin.settings.syncEnabled === false
+    || plugin.settings.readonlySyncEnabled) return false
+  // 只读/排除只是暂停：保留持久恢复意图，当前轮只等仍允许发送的路径。
+  return [...(plugin.pendingNoteModifies?.keys() ?? [])].some(path => !isPathExcluded(path, plugin))
+    || !!plugin.serverMerge.hasPendingWork?.()
 }
 
 function confirmPendingNoteUpload(path: string, plugin: FastSync): void {
   if (plugin.serverMerge.hasPendingWork?.(path)) return
   // 先持久化真实确认的 base，再移除恢复入口，避免卸载/重启窗口丢掉祖先。
   plugin.fileHashManager.flush?.()
+  // 暂停时 dirty 的补传会被发送边界挡住；旧 ACK 不能抹掉较新的本地草稿意图。
+  if (plugin.serverMerge.env?.canSend && !plugin.serverMerge.env.canSend(path)) return
   plugin.pendingNoteModifies.delete(path)
   plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
 }
 
 // End precedes the pages. Commit its query-time cursor only after successful processing.
 export function commitNoteSyncRound(plugin: FastSync): void {
+  // End 可能先于 ACK；保留本轮与临时墓碑，待真实确认后再次提交。
   if (hasPendingNoteUploads(plugin)) return
   const round = noteSyncRounds.get(plugin)
   try {
@@ -748,10 +763,15 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
         if (blockAliasedRemoteMutation(plugin, file, data.oldPath, "NoteRename")) return
         if (blockAliasedRemoteMutation(plugin, plugin.app.vault.getFileByPath(normalizedNewPath), data.path, "NoteRename")) return
         if (sourceBase) {
-          // 同时保留移动前后的恢复入口；任何读写/等槽失败都不能吞掉完整草稿。
-          for (const path of [normalizedOldPath, normalizedNewPath]) {
-            if (!plugin.pendingNoteModifies.has(path)) plugin.pendingNoteModifies.set(path, sourceBase.hash ?? '')
+          // 干净旧源不能登记强制补传：移动前失败/重启时会复活服务端已改名的旧路径。
+          // 只为真实脏源保留旧路径入口；新路径仍在移动前登记，以覆盖移动后的故障窗口。
+          const sourceContent = await plugin.app.vault.read(file)
+          const sourceClean = sourceBase.hash !== null && await hashContentAsync(sourceContent) === sourceBase.hash
+            && (sourceBase.sha === null || await plugin.serverMerge.env.sha(sourceContent) === sourceBase.sha)
+          if (!sourceClean && !plugin.pendingNoteModifies.has(normalizedOldPath)) {
+            plugin.pendingNoteModifies.set(normalizedOldPath, sourceBase.hash ?? '')
           }
+          if (!plugin.pendingNoteModifies.has(normalizedNewPath)) plugin.pendingNoteModifies.set(normalizedNewPath, sourceBase.hash ?? '')
           plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
         }
         plugin.addIgnoredFile(normalizedNewPath)
@@ -837,7 +857,7 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
             if (!matchesRemote) {
               // 即使本地仍等于旧祖先，也必须让服务端返回其新正文；rename 已取消旧路径防抖。
               const uploaded = await plugin.serverMerge.requestUploadFromDisk(normalizedNewPath, true)
-              if (uploaded === 'failed' || uploaded === 'blocked') throw new Error('Renamed source upload not accepted; local content retained')
+              if (uploaded === 'failed') throw new Error('Renamed source upload not accepted; local content retained')
             } else confirmPendingNoteUpload(normalizedNewPath, plugin)
           } else {
             plugin.fileHashManager.setFileHash(data.path, data.contentHash, data.mtime || (renamedFile instanceof TFile ? renamedFile.stat.mtime : 0), renamedFile instanceof TFile ? renamedFile.stat.size : 0, pushRev(data) || undefined, data.sha)

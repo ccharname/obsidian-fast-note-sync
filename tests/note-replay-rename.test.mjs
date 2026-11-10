@@ -11,7 +11,7 @@ class TFolder {}
 class TFile {
   constructor(path, content) { this.path = path; this.content = content; this.extension = path.split('.').pop(); this.stat = { mtime: 1, ctime: 1, size: Buffer.byteLength(content) }; }
 }
-const helpers = { dump: noop, dumpError: noop, isPathExcluded: () => false,
+const helpers = { dump: noop, dumpError: noop, isPathExcluded: (path, p) => p.settings.excludedPaths?.has(path) ?? false,
   hashContent: hash, hashContentAsync: async text => hash(text), getSafeCtime: () => 1,
   checkAndNotifyCaseConflict: () => false, debounce: () => noop,
   generateUUID: () => crypto.randomUUID(), getPluginDir: () => '.obsidian/plugins/test',
@@ -687,6 +687,225 @@ await test('source rename IO failure before the move does not block same-rev rem
   p.pendingNoteModifies.set('phantom.md', '');
   await operator.handleSync(p, true, 'note');
   assert.equal(p.pendingNoteModifies.has('phantom.md'), false, 'ordinary retry drops markers for files that never moved');
+});
+
+
+// CC review regressions: real handler/state machine/progress tracker, with only vault/transport IO mocked.
+const tick = async () => { for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve)); };
+function trackedRound(p) {
+  const { SyncProgressTracker } = load('src/lib/sync/sync_progress_tracker.ts');
+  p.progressTracker = new SyncProgressTracker(); p.progressTracker.reset(['note']);
+  p.recordSyncCompleted = (type, page) => { p.noteSyncTasks.completed++; p.progressTracker.recordCompleted(type, page); };
+  note.beginNoteSyncRound(p, false);
+}
+async function declareEnd(p, lastTime, count = 0) {
+  await note.receiveNoteSyncEnd({ lastTime, needModifyCount: count }, p);
+  p.progressTracker.setDownloadTotal('note', count);
+  p.progressTracker.recordUploadComplete('note', 0);
+  if (count) p.progressTracker.recordPageProgress('note', 0, count, true, true);
+}
+async function reconnect(p, reload) {
+  if (reload) {
+    p.serverMerge.dispose(); operator.cancelSync(p);
+    p.pendingNoteModifies = p.localStorageManager.loadPending('pendingNoteModifies');
+    p.fileHashManager = new FileHashManager(p); await p.fileHashManager.initialize();
+    p.serverMerge = createServerMerge(p);
+  } else { p.serverMerge.reset(); p.isSyncing = false; }
+  p.serverMerge.supported = true;
+}
+
+for (const failure of ['source move', 'target upload']) for (const dirty of [false, true]) {
+  await test('M1: ' + (dirty ? 'dirty' : 'clean') + ' source before ' + failure + ' failure survives reset/reload without spurious old-name upload', async () => {
+    for (const reload of [false, true]) {
+      const { p, put, files, sent, metadata } = fixture();
+      trackedRound(p); put('old.md', 'base', 50); metadata.set('lastNoteSyncTime', 90);
+      if (dirty) files.get('old.md').content = 'LOCAL complete draft\n正文';
+      const rename = p.app.vault.rename;
+      if (failure === 'source move') p.app.vault.rename = async () => { throw Error('source move denied'); };
+      else { put('new.md', 'TARGET complete draft'); p.concurrencyLimiter.waitForSlot = async () => false; }
+      await note.receiveNoteSyncRename({ oldPath: 'old.md', path: 'new.md', contentHash: hash('REMOTE'), sha: sha('REMOTE'), rev: 100 }, p);
+      assert.equal(files.get('old.md')?.content, dirty ? 'LOCAL complete draft\n正文' : 'base');
+      assert.equal(p.pendingNoteModifies.has('old.md'), dirty, 'only a real local edit needs the old-name recovery intent');
+      if (failure === 'target upload') assert.ok([...files.values()].some(file => file.content === 'TARGET complete draft'));
+      p.app.vault.rename = rename; p.concurrencyLimiter.waitForSlot = async () => true;
+      p.fileHashManager.flush();
+      await reconnect(p, reload);
+      await operator.handleSync(p, true, 'note'); await tick();
+      const oldUploads = sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'old.md');
+      assert.equal(oldUploads.length, dirty ? 1 : 0, 'a clean old path must not be recreated on the server after failed rename');
+      if (dirty) {
+        assert.equal(oldUploads[0].data.content, 'LOCAL complete draft\n正文');
+        assert.equal(oldUploads[0].data.baseSha, sha('base'));
+      }
+    }
+  });
+}
+
+for (const remote of ['delete', 'rename', 'modify']) await test('M2: readonly remote ' + remote + ' preserves paused draft and resumes after reset/reload', async () => {
+  for (const reload of [false, true]) {
+    const { p, put, files, sent, metadata } = fixture();
+    put('old.md', 'base', 50); files.get('old.md').content = 'LOCAL complete draft\n正文';
+    p.settings.readonlySyncEnabled = true;
+    trackedRound(p); await declareEnd(p, 200, 1);
+    if (remote === 'delete') await note.receiveNoteSyncDelete({ path: 'old.md', rev: 100, pageIndex: 0 }, p);
+    else if (remote === 'rename') await note.receiveNoteSyncRename({ oldPath: 'old.md', path: 'new.md', contentHash: hash('REMOTE'), sha: sha('REMOTE'), rev: 100, pageIndex: 0 }, p);
+    else await note.receiveNoteSyncModify({ path: 'old.md', content: 'REMOTE', contentHash: hash('REMOTE'), sha: sha('REMOTE'), rev: 100, pageIndex: 0 }, p);
+    await tick();
+    assert.equal(p.progressTracker.isTypeFullyDone('note'), true);
+    assert.equal(p.noteSyncTasks.failed, 0, 'readonly is a pause, not an IO failure');
+    assert.equal(note.hasPendingNoteUploads(p), false, 'paused intents must not block the current round');
+    note.commitNoteSyncRound(p);
+    assert.equal(metadata.get('lastNoteSyncTime'), 200);
+    assert.equal(sent.filter(({ action }) => action === 'NoteModify').length, 0);
+    const path = remote === 'rename' ? 'new.md' : 'old.md';
+    assert.equal(files.get(path)?.content, 'LOCAL complete draft\n正文');
+    assert.equal(p.localStorageManager.loadPending('pendingNoteModifies').has(path), true, 'draft needs a persistent resume intent despite the advanced cursor');
+    await reconnect(p, reload);
+    await operator.handleSync(p, true, 'note'); await tick();
+    assert.equal(sent.filter(({ action }) => action === 'NoteModify').length, 0, 'a readonly rescan sends no writes');
+    p.settings.readonlySyncEnabled = false;
+    await reconnect(p, reload);
+    await operator.handleSync(p, true, 'note'); await tick();
+    const uploads = sent.filter(({ action, data }) => action === 'NoteModify' && data.path === path);
+    assert.equal(uploads.length, 1, 'reenabling writes resumes the persisted old-mtime intent');
+    assert.equal(uploads[0].data.content, 'LOCAL complete draft\n正文');
+    if (remote !== 'delete') assert.equal(uploads[0].data.baseSha, sha('base'));
+    await note.receiveNoteModifyAck({ path, opId: uploads[0].data.opId, rev: 201, sha: sha(uploads[0].data.content) }, p);
+    assert.equal(p.pendingNoteModifies.size, 0);
+  }
+});
+
+for (const pause of ['readonly', 'excluded']) for (const queued of ['inflight', 'deferred']) {
+  await test('M2: ' + pause + ' after ' + queued + ' pauses completion and retries while retaining reload recovery', async () => {
+    const { p, put, files, sent, metadata } = fixture();
+    put('same.md', 'base', 50); files.get('same.md').content = 'LOCAL';
+    if (queued === 'deferred') { p.serverMerge.maxQueuedBytes = 10; put('other.md', '12345678'); await p.serverMerge.requestUploadFromDisk('other.md'); }
+    await p.serverMerge.requestUploadFromDisk('same.md', true);
+    if (pause === 'readonly') p.settings.readonlySyncEnabled = true;
+    else p.settings.excludedPaths = new Set(['same.md']);
+    const before = sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'same.md').length;
+    if (queued === 'deferred') {
+      const other = sent.find(({ data }) => data.path === 'other.md').data;
+      await note.receiveNoteModifyAck({ path: 'other.md', opId: other.opId, rev: 80, sha: sha(other.content) }, p); await tick();
+    } else {
+      // Exercise the actual resend boundary as well as a fresh explicit force.
+      const entry = p.serverMerge.inflight.get('same.md');
+      await p.serverMerge.onTimeout('same.md', entry);
+      await p.serverMerge.requestUploadFromDisk('same.md', true);
+    }
+    assert.equal(sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'same.md').length, before, 'paused in-flight retries and deferred drains must not write');
+    trackedRound(p); await declareEnd(p, 200);
+    assert.equal(note.hasPendingNoteUploads(p), false);
+    note.commitNoteSyncRound(p); assert.equal(metadata.get('lastNoteSyncTime'), 200);
+    assert.equal(p.localStorageManager.loadPending('pendingNoteModifies').has('same.md'), true);
+    p.fileHashManager.flush(); await reconnect(p, true);
+    await operator.handleSync(p, true, 'note'); await tick();
+    assert.equal(sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'same.md').length, before);
+    p.settings.readonlySyncEnabled = false; p.settings.excludedPaths?.clear();
+    await reconnect(p, false); await operator.handleSync(p, true, 'note'); await tick();
+    const op = sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'same.md').at(-1).data;
+    assert.equal(sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'same.md').length, before + 1);
+    assert.equal(op.content, 'LOCAL'); assert.equal(op.baseSha, sha('base'));
+    await note.receiveNoteModifyAck({ path: 'same.md', opId: op.opId, rev: 201, sha: sha('LOCAL') }, p);
+    assert.equal(p.pendingNoteModifies.has('same.md'), false);
+  });
+}
+
+await test('L1/L2: same-rev page does not duplicate in-flight force and late ACK commits the retained round', async () => {
+  const { p, put, files, sent, metadata } = fixture();
+  put('same.md', 'base', 50); files.get('same.md').content = 'LOCAL';
+  trackedRound(p); await p.serverMerge.requestUploadFromDisk('same.md', true);
+  await declareEnd(p, 200, 1);
+  await note.receiveNoteSyncModify({ path: 'same.md', content: 'REMOTE', contentHash: hash('REMOTE'), sha: sha('REMOTE'), rev: 50, pageIndex: 0 }, p);
+  note.commitNoteSyncRound(p);
+  assert.equal(metadata.has('lastNoteSyncTime'), false, 'L1: the round must wait for the actual ACK');
+  const op = sent[0].data;
+  await note.receiveNoteModifyAck({ path: 'same.md', opId: op.opId, rev: 201, merged: true, content: 'LOCAL + REMOTE', sha: sha('LOCAL + REMOTE') }, p);
+  assert.equal(sent.filter(({ action }) => action === 'NoteModify').length, 1, 'L2: a duplicate page is not a new local edit');
+  assert.equal(files.get('same.md').content, 'LOCAL + REMOTE');
+  assert.equal(note.hasPendingNoteUploads(p), false);
+  note.commitNoteSyncRound(p);
+  assert.equal(metadata.get('lastNoteSyncTime'), 200, 'L1: retaining the round allows its cursor to commit after the late ACK');
+});
+
+await test('L3: legacy cancelled clean pending does not create a false conflict; genuine dirty pending survives', async () => {
+  for (const dirty of [false, true]) {
+    const { p, put, files } = fixture();
+    trackedRound(p); put('same.md', 'base', 0); p.fileHashManager.setFileHash('same.md', hash('base'), 1, 4);
+    if (dirty) files.get('same.md').content = 'LOCAL';
+    p.serverMerge.supported = false;
+    p.pendingNoteModifies.set('same.md', hash(dirty ? 'LOCAL' : 'base'));
+    p.localStorageManager.savePending('pendingNoteModifies', p.pendingNoteModifies);
+    const backups = new Map();
+    Object.assign(p.app.vault.adapter, { mkdir: async () => {}, write: async (path, body) => backups.set(path, body), read: async path => backups.get(path) });
+    operator.cancelSync(p);
+    await note.receiveNoteSyncModify({ path: 'same.md', content: 'REMOTE', contentHash: hash('REMOTE'), mtime: 100 }, p);
+    assert.equal(files.get('same.md').content, dirty ? 'LOCAL' : 'REMOTE');
+    assert.equal([...backups.keys()].some(path => path.endsWith('.remote.md')), dirty, 'only a real local edit should require legacy conflict preservation');
+    assert.equal(p.pendingNoteModifies.has('same.md'), dirty);
+  }
+});
+
+
+for (const pause of ['readonly', 'excluded']) await test('M2: ACK during ' + pause + ' cannot erase the intent for a newer old-mtime edit', async () => {
+  const { p, put, files, sent, metadata } = fixture();
+  trackedRound(p); put('same.md', 'base', 50); files.get('same.md').content = 'FIRST';
+  await p.serverMerge.requestUploadFromDisk('same.md', true);
+  const op = sent[0].data;
+  if (pause === 'readonly') p.settings.readonlySyncEnabled = true;
+  else p.settings.excludedPaths = new Set(['same.md']);
+  files.get('same.md').content = 'SECOND complete draft';
+  await declareEnd(p, 200);
+  note.commitNoteSyncRound(p); assert.equal(metadata.get('lastNoteSyncTime'), 200);
+  await note.receiveNoteModifyAck({ path: 'same.md', opId: op.opId, rev: 100, sha: sha('FIRST') }, p); await tick();
+  assert.equal(files.get('same.md').content, 'SECOND complete draft');
+  assert.equal(p.pendingNoteModifies.has('same.md'), true, 'a paused dirty flush is not confirmation of the newer local body');
+  assert.equal(sent.length, 1);
+  await reconnect(p, true);
+  p.settings.readonlySyncEnabled = false; p.settings.excludedPaths?.clear();
+  await operator.handleSync(p, true, 'note'); await tick();
+  const retry = sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'same.md').at(-1).data;
+  assert.equal(retry.content, 'SECOND complete draft'); assert.equal(retry.baseSha, sha('FIRST'));
+});
+
+await test('L2: same-rev persisted force upgrades an ordinary request still waiting for its slot', async () => {
+  const { p, put, sent } = fixture();
+  put('same.md', 'base', 50); p.serverMerge.env.markUploadPending('same.md');
+  let grant;
+  p.concurrencyLimiter.waitForSlot = () => new Promise(resolve => { grant = resolve; });
+  const ordinary = p.serverMerge.requestUploadFromDisk('same.md');
+  await note.receiveNoteSyncModify({ path: 'same.md', content: 'REMOTE', contentHash: hash('REMOTE'), sha: sha('REMOTE'), rev: 50 }, p);
+  grant(true); await ordinary; await tick();
+  assert.equal(sent.length, 1, 'queued no-op must retain the persisted force, without adding a second upload');
+  const op = sent[0].data;
+  await note.receiveNoteModifyAck({ path: 'same.md', opId: op.opId, rev: 100, merged: true, content: 'REMOTE', sha: sha('REMOTE') }, p);
+  assert.equal(sent.length, 1); assert.equal(p.pendingNoteModifies.size, 0);
+});
+
+await test('M2: toggling exclusion while acquiring a content-upload slot blocks the actual send and releases it', async () => {
+  const { p, put, files, sent } = fixture();
+  put('same.md', 'base', 50); files.get('same.md').content = 'LOCAL';
+  let grant, releases = 0;
+  p.concurrencyLimiter.waitForSlot = () => new Promise(resolve => { grant = resolve; });
+  p.concurrencyLimiter.releaseSlot = () => { releases++; };
+  const upload = p.serverMerge.requestUpload('same.md', 'LOCAL', hash('LOCAL'), true);
+  await tick(); p.settings.excludedPaths = new Set(['same.md']); grant(true);
+  assert.equal(await upload, 'failed'); assert.equal(sent.length, 0); assert.equal(releases, 1);
+  assert.equal(p.pendingNoteModifies.has('same.md'), true);
+});
+
+await test('L3: known SHA prevents legacy cancellation cleanup from mistaking a hash32 collision for a clean draft', async () => {
+  const { p, put, files } = fixture();
+  trackedRound(p); put('same.md', 'base', 50); files.get('same.md').content = 'LOCAL';
+  // Model hash32(base) == hash32(LOCAL), while trusted SHA still distinguishes the complete bodies.
+  p.fileHashManager.setFileHash('same.md', hash('LOCAL'), 1, 4, 50, sha('base'));
+  p.serverMerge.supported = false; p.pendingNoteModifies.set('same.md', hash('LOCAL'));
+  const backups = new Map();
+  Object.assign(p.app.vault.adapter, { mkdir: async () => {}, write: async (path, body) => backups.set(path, body), read: async path => backups.get(path) });
+  operator.cancelSync(p);
+  await note.receiveNoteSyncModify({ path: 'same.md', content: 'REMOTE', contentHash: hash('REMOTE'), mtime: 100 }, p);
+  assert.equal(files.get('same.md').content, 'LOCAL'); assert.equal(p.pendingNoteModifies.has('same.md'), true);
+  assert.ok([...backups.values()].includes('REMOTE'));
 });
 
 assert.equal(failures.length, 0, failures.join(', '));

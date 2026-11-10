@@ -1,7 +1,7 @@
 import { normalizePath, TFile } from "obsidian";
 
 import type FastSync from "../../main";
-import { hashContent, hashContentAsync, getSafeCtime, dump } from "../utils/helpers";
+import { hashContent, hashContentAsync, getSafeCtime, dump, isPathExcluded } from "../utils/helpers";
 import { ServerMergeClient } from "./server_merge_client";
 import { handleSync } from "./operator";
 import type { MergeEnv } from "./server_merge_client";
@@ -65,7 +65,8 @@ export function createServerMerge(plugin: FastSync): ServerMergeClient {
       plugin.fileHashManager.setFileHash(path, b.hash, f?.stat.mtime || 0, f?.stat.size || 0, b.rev, b.sha || undefined);
       if (f) plugin.lastSyncMtime.set(path, f.stat.mtime);
     },
-    canSend: () => plugin.settings.syncEnabled !== false && !plugin.settings.readonlySyncEnabled,
+    canSend: (path) => plugin.settings.syncEnabled !== false && !plugin.settings.readonlySyncEnabled
+      && (path === undefined || !isPathExcluded(path, plugin)),
     markUploadPending: (path) => {
       if (!vault().getFileByPath(normalizePath(path)) || plugin.pendingNoteModifies.has(path)) return;
       plugin.pendingNoteModifies.set(path, plugin.fileHashManager.getPathHash(path) ?? '');
@@ -81,7 +82,7 @@ export function createServerMerge(plugin: FastSync): ServerMergeClient {
       }
     },
     sendModify: async (op) => {
-      if (!env.canSend?.()) return false;
+      if (!env.canSend?.(op.path)) return false;
       const f = vault().getFileByPath(normalizePath(op.path));
       if (!(f instanceof TFile)) return false;
       const data = {
@@ -102,6 +103,11 @@ export function createServerMerge(plugin: FastSync): ServerMergeClient {
       plugin.pendingNoteModifies.set(f.path, op.hash);
       plugin.localStorageManager.savePending("pendingNoteModifies", plugin.pendingNoteModifies);
       if (!op.slotHeld && !(await plugin.concurrencyLimiter.waitForSlot(f.path))) return false;
+      // 等槽期间可能切换只读或排除规则；真正发送前再次核对。
+      if (!env.canSend?.(op.path)) {
+        if (!op.slotHeld) plugin.concurrencyLimiter.releaseSlot(f.path);
+        return false;
+      }
       const context = client.uploadContexts.get(f.path);
       client.uploadContexts.delete(f.path);
       void plugin.websocket.SendMessage("NoteModify", data, undefined, undefined, context);
