@@ -66,10 +66,19 @@ export function createServerMerge(plugin: FastSync): ServerMergeClient {
       if (f) plugin.lastSyncMtime.set(path, f.stat.mtime);
     },
     canSend: () => plugin.settings.syncEnabled !== false && !plugin.settings.readonlySyncEnabled,
+    markUploadPending: (path) => {
+      if (!vault().getFileByPath(normalizePath(path)) || plugin.pendingNoteModifies.has(path)) return;
+      plugin.pendingNoteModifies.set(path, plugin.fileHashManager.getPathHash(path) ?? '');
+      plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies);
+    },
+    hasPendingUpload: (path) => plugin.pendingNoteModifies.has(path),
     clearBase: (path, rev) => {
       plugin.fileHashManager.removeFileHash(path, rev);
       plugin.lastSyncMtime.delete(path);
-      plugin.pendingNoteModifies.delete(path);
+      if (!vault().getFileByPath(normalizePath(path))) {
+        plugin.pendingNoteModifies.delete(path);
+        plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies);
+      }
     },
     sendModify: async (op) => {
       if (!env.canSend?.()) return false;

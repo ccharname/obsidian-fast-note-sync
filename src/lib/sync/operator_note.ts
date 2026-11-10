@@ -306,8 +306,7 @@ export const receiveNoteSyncModify = async function (data: ReceiveMessage, plugi
         const r = await plugin.serverMerge.onPush({ path: normalizedPath, content: data.content, contentHash: data.contentHash, sha: data.sha, rev: pushRevN, reconcile: isNoteReconcilePage(data, plugin) })
         if (r === "applied") {
           // serverMerge 会话：增量水位只由 SyncEnd（连续确认完成的批次）推进，实时推送 / 乱序分页不得越过尚未收到的项
-          plugin.pendingNoteModifies.delete(normalizedPath)
-          plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
+          confirmPendingNoteUpload(normalizedPath, plugin)
           plugin.pendingNoteDeleteAcks.delete(normalizedPath)
         }
         return
@@ -537,9 +536,10 @@ export const receiveNoteSyncMtime = async function (data: ReceiveMtimeMessage, p
   const pushPageIndex = plugin.syncState.pendingNotePushPageIndex.get(data.path);
   const completionPageIndex = pushPageIndex ?? data.pageIndex;
   plugin.syncState.pendingNotePushPageIndex.delete(data.path);
-  plugin.concurrencyLimiter.releaseSlot(data.path);
-  // serverMerge：内容相同时服务端可能用 Mtime 代替 Ack，同样解除在途并补发 dirty
-  if (plugin.serverMerge.supported) void plugin.serverMerge.settle(normalizePath(data.path));
+  // Mtime 是清单响应，没有 opId，不能确认或释放另一个 serverMerge 正文上传。
+  if (!plugin.serverMerge.supported || !plugin.serverMerge.hasPendingWork(normalizePath(data.path))) {
+    plugin.concurrencyLimiter.releaseSlot(data.path);
+  }
   if (isPathExcluded(data.path, plugin)) {
     plugin.recordSyncCompleted('note', completionPageIndex)
     return
@@ -561,7 +561,7 @@ export const receiveNoteSyncMtime = async function (data: ReceiveMtimeMessage, p
           // 服务端走 UpdateMtime 说明内容 hash 与客户端发送的一致，提交 pending hash 到 hashManager
           // Server UpdateMtime means content hash matches what client sent; commit pending hash to hashManager
           const pendingHash = plugin.pendingNoteModifies.get(data.path)
-          if (pendingHash !== undefined) {
+          if (pendingHash !== undefined && !plugin.serverMerge.supported) {
             plugin.fileHashManager.setFileHash(data.path, pendingHash, data.mtime, file.stat.size)
             plugin.pendingNoteModifies.delete(data.path)
             plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
@@ -666,8 +666,22 @@ export function abortNoteSyncRound(plugin: FastSync): void {
   plugin.fileHashManager?.endReconcile?.()
 }
 
+export function hasPendingNoteUploads(plugin: FastSync): boolean {
+  return !!plugin.serverMerge?.supported && ((plugin.pendingNoteModifies?.size ?? 0) > 0
+    || !!plugin.serverMerge.hasPendingWork?.())
+}
+
+function confirmPendingNoteUpload(path: string, plugin: FastSync): void {
+  if (plugin.serverMerge.hasPendingWork?.(path)) return
+  // 先持久化真实确认的 base，再移除恢复入口，避免卸载/重启窗口丢掉祖先。
+  plugin.fileHashManager.flush?.()
+  plugin.pendingNoteModifies.delete(path)
+  plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
+}
+
 // End precedes the pages. Commit its query-time cursor only after successful processing.
 export function commitNoteSyncRound(plugin: FastSync): void {
+  if (hasPendingNoteUploads(plugin)) return
   const round = noteSyncRounds.get(plugin)
   try {
     if (!plugin.serverMerge?.supported || !round || !round.context
@@ -733,6 +747,13 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
       if (file instanceof TFile) {
         if (blockAliasedRemoteMutation(plugin, file, data.oldPath, "NoteRename")) return
         if (blockAliasedRemoteMutation(plugin, plugin.app.vault.getFileByPath(normalizedNewPath), data.path, "NoteRename")) return
+        if (sourceBase) {
+          // 同时保留移动前后的恢复入口；任何读写/等槽失败都不能吞掉完整草稿。
+          for (const path of [normalizedOldPath, normalizedNewPath]) {
+            if (!plugin.pendingNoteModifies.has(path)) plugin.pendingNoteModifies.set(path, sourceBase.hash ?? '')
+          }
+          plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
+        }
         plugin.addIgnoredFile(normalizedNewPath)
         plugin.addIgnoredFile(normalizedOldPath)
 
@@ -751,6 +772,8 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
               let copyPath = copyBase + '.md'
               for (let suffix = 2; plugin.app.vault.getAbstractFileByPath(copyPath); suffix++) copyPath = copyBase + '-' + suffix + '.md'
               if (isPathExcluded(copyPath, plugin)) throw new Error('Rename draft copy path excluded from sync')
+              plugin.pendingNoteModifies.set(copyPath, '')
+              plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
               plugin.addIgnoredFile(copyPath)
               plugin.lastSyncPathRenamed.add(copyPath)
               try {
@@ -768,7 +791,21 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
             }
           }
 
+          if (sourceBase) {
+            // 移动前先持久失效旧目标祖先；中途崩溃至多走无 base 冲突保全。
+            plugin.fileHashManager.removeFileHash(normalizedNewPath)
+            plugin.fileHashManager.setSyncBase(normalizedNewPath, '')
+            plugin.fileHashManager.flush?.()
+          }
           await plugin.app.vault.rename(file, normalizedNewPath)
+          if (sourceBase) {
+            // 移动成功后立即保存源祖先，再做可能失败的 mtime IO。
+            plugin.fileHashManager.removeFileHash(normalizedOldPath, pushRev(data))
+            plugin.fileHashManager.setSyncBase(normalizedNewPath, sourceBase.hash ?? '', pushRev(data), sourceBase.sha ?? undefined)
+            plugin.fileHashManager.flush?.()
+            plugin.pendingNoteModifies.delete(normalizedOldPath)
+            plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
+          }
 
           // 更新元数据
           if (data.mtime) {
@@ -794,11 +831,14 @@ export const receiveNoteSyncRename = async function (data: { path: string, oldPa
             plugin.fileHashManager.setSyncBase(normalizedNewPath,
               matchesRemote ? data.contentHash : sourceBase?.hash ?? '', pushRev(data),
               matchesRemote ? data.sha : sourceBase?.sha ?? undefined)
+            plugin.fileHashManager.flush?.()
+            plugin.pendingNoteModifies.delete(normalizedOldPath)
+            plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
             if (!matchesRemote) {
               // 即使本地仍等于旧祖先，也必须让服务端返回其新正文；rename 已取消旧路径防抖。
               const uploaded = await plugin.serverMerge.requestUploadFromDisk(normalizedNewPath, true)
               if (uploaded === 'failed' || uploaded === 'blocked') throw new Error('Renamed source upload not accepted; local content retained')
-            }
+            } else confirmPendingNoteUpload(normalizedNewPath, plugin)
           } else {
             plugin.fileHashManager.setFileHash(data.path, data.contentHash, data.mtime || (renamedFile instanceof TFile ? renamedFile.stat.mtime : 0), renamedFile instanceof TFile ? renamedFile.stat.size : 0, pushRev(data) || undefined, data.sha)
           }
@@ -862,10 +902,6 @@ export const receiveNoteModifyAck = async function (data: { lastTime?: number; p
   }
   // base/rev 由状态机在校验 opId 后提交，这里只清 pending
   const smAck = plugin.serverMerge.supported && !!data.path
-  if (smAck) {
-    plugin.pendingNoteModifies.delete(data.path as string)
-    plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies)
-  }
   // 服务端确认笔记写入成功，将 pending hash 转移到正式 hashManager
   // Server confirmed note write success, move pending hash to formal hashManager
   if (data.path && !smAck) {
@@ -895,7 +931,8 @@ export const receiveNoteModifyAck = async function (data: { lastTime?: number; p
   if (data.path) plugin.syncState.pendingNotePushPageIndex.delete(data.path)
   if (smAck) {
     try {
-      await plugin.serverMerge.onAck(data as AckInfo)
+      const result = await plugin.serverMerge.onAck(data as AckInfo)
+      if (result !== 'ignored') confirmPendingNoteUpload(data.path as string, plugin)
     } catch (e) {
       plugin.noteSyncTasks.failed++
       dumpError('Failed to apply NoteModifyAck', e)

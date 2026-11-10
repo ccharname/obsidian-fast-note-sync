@@ -82,6 +82,9 @@ export interface MergeEnv {
   onCopyMissing?(path: string): void;
   /** 本地文件大小（字节近似），用于读全文前的内存预算判断 */
   localSize?(path: string): number | null;
+  /** 强制补传在排队/等槽前持久登记，断线与重启后由扫描恢复。 */
+  markUploadPending?(path: string): void;
+  hasPendingUpload?(path: string): boolean;
 }
 
 /** 服务端发送队列超限时用该关闭码断开：客户端下次连接必须做完整对账，不能沿用增量水位 */
@@ -158,6 +161,12 @@ export class ServerMergeClient {
 
   isInflight(path: string): boolean {
     return this.inflight.has(path);
+  }
+
+  hasPendingWork(path?: string): boolean {
+    if (path !== undefined) return this.inflight.has(path) || this.dirty.has(path)
+      || this.deferred.has(path) || this.busy.has(path);
+    return this.inflight.size + this.dirty.size + this.deferred.size + this.busy.size > 0;
   }
 
   /** 断线 / 会话结束：在途与脏标记作废（opId 保留以便同内容重试沿用） */
@@ -329,6 +338,7 @@ export class ServerMergeClient {
    * 单飞：在途期间只标 dirty。force：NeedPush 驱动，即使与 base 相同也要发。
    */
   async requestUpload(path: string, content: string, hash: string, force = false): Promise<UploadResult> {
+    if (force) this.env.markUploadPending?.(path);
     if (this.env.canSend && !this.env.canSend()) return "blocked";
     if (this.inflight.has(path) || this.busy.has(path)) {
       this.markDirty(path, force);
@@ -390,6 +400,7 @@ export class ServerMergeClient {
    * 排队正文总字节超过预算时只排路径（deferred），等在途完成后再读。
    */
   async requestUploadFromDisk(path: string, force = false): Promise<UploadResult> {
+    if (force) this.env.markUploadPending?.(path);
     if (this.env.canSend && !this.env.canSend()) return "blocked";
     if (this.inflight.has(path) || this.busy.has(path)) {
       this.markDirty(path, force);
@@ -717,6 +728,10 @@ export class ServerMergeClient {
     const p = m.path;
     return this.chain(p, async (): Promise<PushResult> => {
       const base = this.env.getBase(p);
+      if (rev === base.rev && this.env.hasPendingUpload?.(p)) {
+        void this.requestUploadFromDisk(p, true);
+        return "upload";
+      }
       if (rev <= base.rev) return "dropped";
       if (!m.reconcile && rev <= (this.env.getReplayFloor?.(p) ?? 0)) return "dropped";
       if (this.inflight.has(p) || this.busy.has(p)) return "dropped";

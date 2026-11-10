@@ -7,24 +7,27 @@ import ts from 'typescript';
 const noop = () => {};
 const hash = text => 'h:' + text;
 const sha = text => crypto.createHash('sha256').update(text).digest('hex');
+class TFolder {}
 class TFile {
-  constructor(path, content) { this.path = path; this.content = content; this.stat = { mtime: 1, ctime: 1, size: Buffer.byteLength(content) }; }
+  constructor(path, content) { this.path = path; this.content = content; this.extension = path.split('.').pop(); this.stat = { mtime: 1, ctime: 1, size: Buffer.byteLength(content) }; }
 }
 const helpers = { dump: noop, dumpError: noop, isPathExcluded: () => false,
   hashContent: hash, hashContentAsync: async text => hash(text), getSafeCtime: () => 1,
   checkAndNotifyCaseConflict: () => false, debounce: () => noop,
+  generateUUID: () => crypto.randomUUID(), getPluginDir: () => '.obsidian/plugins/test',
+  getConfigSyncCustomDirs: () => [], yieldToMain: async () => {}, isFolderSyncPathExcluded: () => false,
   LocalStateFileMirror: class { flush() {} scheduleWrite() {} } };
 function load(file, extra = {}) {
   const module = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
   }).outputText;
-  vm.runInNewContext(code, { module, exports: module.exports, console, btoa, atob, TextEncoder,
-    window: { crypto: crypto.webcrypto, setTimeout: () => 1, clearTimeout: noop },
-    require: id => extra[id] || (id === 'obsidian' ? { TFile, normalizePath: x => x }
+  vm.runInNewContext(code, { module, exports: module.exports, console, btoa, atob, TextEncoder, sleep: async () => {}, WebSocket: { OPEN: 1 },
+    window: { crypto: crypto.webcrypto, setTimeout: () => 1, clearTimeout: noop, setInterval: () => 1, clearInterval: noop },
+    require: id => extra[id] || (id === 'obsidian' ? { TFile, TFolder, normalizePath: x => x }
       : id.includes('remote_path_guard') ? { blockAliasedRemoteMutation: () => false }
       : id.includes('helpers') ? helpers
-      : id.includes('sync_log_manager') ? { SyncLogManager: { getInstance: () => ({ addLog: noop }) } }
+      : id.includes('sync_log_manager') ? { SyncLogManager: { getInstance: () => ({ addLog: noop, addOrUpdateLog: noop }) } }
       : {}) });
   return module.exports;
 }
@@ -32,9 +35,18 @@ const { FileHashManager } = load('src/lib/storage/file_hash_manager.ts');
 const merge = load('src/lib/sync/server_merge_client.ts');
 const { createServerMerge } = load('src/lib/sync/server_merge_env.ts', { './server_merge_client': merge });
 const note = load('src/lib/sync/operator_note.ts');
+const operator = load('src/lib/sync/operator.ts', {
+  './operator_note': note,
+  './websocket_action': new Proxy({}, { get: (_, key) => key }),
+  '../../i18n/lang': { $: key => key },
+  './sync_batch_sender': { settleBatchSendSessionOnSyncEnd: noop },
+  './operator_file': { sweepStalledDownloadSessions: async () => {} },
+});
 function fixture() {
   const files = new Map(), metadata = new Map(), storage = new Map(), sent = [], trashed = [];
   const vault = {
+    adapter: { exists: async () => false }, configDir: '.obsidian',
+    getAllLoadedFiles: () => [...files.values()],
     getFileByPath: path => files.get(path) ?? null,
     getAbstractFileByPath: path => files.get(path) ?? null,
     getFolderByPath: () => ({}),
@@ -49,16 +61,27 @@ function fixture() {
     app: { vault, loadLocalStorage: key => storage.get(key), saveLocalStorage: (key, value) => storage.set(key, value) },
     settings: { syncEnabled: true, readonlySyncEnabled: false, vault: 'test' },
     getClientName: () => 'test device',
-    syncState: { activeSyncContext: 'round', pendingNotePushPageIndex: new Map() },
+    syncState: { activeSyncContext: 'round', pendingNotePushPageIndex: new Map(), pendingFilePushPageIndex: new Map(), pendingConfigPushPageIndex: new Map(),
+      conflictedPaths: new Set(), newConflictedPathsThisRound: new Set(), syncUpChunkNum: 200, pipelineWindowUp: 0 },
     noteSyncTasks: { completed: 0, failed: 0 }, syncTypeCompleteCount: 0,
     progressTracker: { isTypeFullyDone: () => true },
     recordSyncCompleted: () => p.noteSyncTasks.completed++,
-    localStorageManager: { setMetadata: (key, value) => metadata.set(key, value), savePending: noop },
+    localStorageManager: { setMetadata: (key, value) => metadata.set(key, value), getMetadata: key => metadata.get(key),
+      savePending: (key, values) => storage.set(key, JSON.stringify(Object.fromEntries(values))),
+      loadPending: key => new Map(Object.entries(JSON.parse(storage.get(key) ?? '{}'))),
+      clearPending: key => storage.delete(key) },
     lockManager: { withLock: async (_, fn) => fn() }, addIgnoredFile: noop, removeIgnoredFile: noop, isIgnoredFile: () => false,
     lastSyncPathDeleted: new Set(), lastSyncPathRenamed: new Set(), lastSyncMtime: new Map(),
     pendingNoteModifies: new Map(), pendingNoteDeleteAcks: new Set(),
     concurrencyLimiter: { waitForSlot: async () => true, releaseSlot: noop },
-    websocket: { SendMessage: (action, data) => { sent.push({ action, data }); } },
+    websocket: { SendMessage: (action, data, _cb, sentCb) => { sent.push({ action, data }); sentCb?.(); } },
+    menuManager: { ribbonIconStatus: true }, updateStatusBar: noop, syncPageStateMap: new Map(),
+    pendingDeleteNotePaths: new Set(), pendingDeleteFilePaths: new Set(), pendingDeleteFolderPaths: new Set(), pendingDeleteConfigPaths: new Set(),
+    pendingFileDeleteAcks: new Set(), pendingConfigDeleteAcks: new Set(),
+    pendingConfigModifies: new Map(), pendingUploadHashes: new Map(),
+    folderSnapshotManager: { setFolderMtimes: noop, isReady: () => false },
+    scannedNoteHashes: new Map(), scannedFileHashes: new Map(),
+    resetSyncTasks: () => Object.assign(p.noteSyncTasks, { completed: 0, failed: 0, needUpload: 0, needModify: 0, needSyncMtime: 0, needDelete: 0 }),
   };
   p.fileHashManager = new FileHashManager(p);
   p.serverMerge = createServerMerge(p); p.serverMerge.supported = true;
@@ -367,15 +390,15 @@ await test('real tracker: deferred 13 MiB forced rename behind 20 MiB upload mus
     const promise = upload(path, force); drained.push({ path, force, promise }); return promise;
   };
   const other = sent.find(({ data }) => data.path === 'other.md').data;
-  await p.serverMerge.onAck({ path: 'other.md', opId: other.opId, rev: 101, sha: sha(other.content) });
+  await note.receiveNoteModifyAck({ path: 'other.md', opId: other.opId, rev: 101, sha: sha(other.content) }, p);
   for (const entry of drained) await entry.promise;
   const renamed = sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'new.md');
   assert.equal(renamed.length, 1, 'budget drain must send the forced unchanged ancestor');
   assert.equal(drained[0].force, true);
   assert.equal(renamed[0].data.baseSha, sha(base));
   assert.equal(renamed[0].data.content, base);
-  await p.serverMerge.onAck({ path: 'new.md', opId: renamed[0].data.opId, rev: 102,
-    merged: true, content: remote, sha: sha(remote) });
+  await note.receiveNoteModifyAck({ path: 'new.md', opId: renamed[0].data.opId, rev: 102,
+    merged: true, content: remote, sha: sha(remote) }, p);
   await note.receiveNoteSyncEnd({ lastTime: 200, needModifyCount: 1 }, p);
   p.progressTracker.setDownloadTotal('note', 1);
   p.progressTracker.recordUploadComplete('note', p.noteSyncTasks.completed);
@@ -516,6 +539,154 @@ await test('reset/dispose discard queued force without contaminating the next se
     assert.equal(await p.serverMerge.requestUploadFromDisk('same.md'), 'unchanged');
     assert.equal(sent.length, 1, 'old force must not leak into a new session');
   }
+});
+
+await test('End and same-rev page before forced rename ACK cannot commit a successful cursor', async () => {
+  const { p, put, metadata } = fixture();
+  const { SyncProgressTracker } = load('src/lib/sync/sync_progress_tracker.ts');
+  p.progressTracker = new SyncProgressTracker(); p.progressTracker.reset(['note']);
+  p.recordSyncCompleted = (type, page) => { p.noteSyncTasks.completed++; p.progressTracker.recordCompleted(type, page); };
+  p.serverMerge.maxQueuedBytes = 10;
+  metadata.set('lastNoteSyncTime', 60);
+  put('old.md', 'base', 50); put('other.md', '12345678');
+  await p.serverMerge.requestUploadFromDisk('other.md');
+  note.beginNoteSyncRound(p, false);
+  await note.receiveNoteSyncRename({ oldPath: 'old.md', path: 'new.md', contentHash: hash('REMOTE'),
+    sha: sha('REMOTE'), rev: 100, mtime: 80 }, p);
+  await note.receiveNoteSyncEnd({ lastTime: 200, needModifyCount: 1 }, p);
+  p.progressTracker.setDownloadTotal('note', 1);
+  p.progressTracker.recordUploadComplete('note', p.noteSyncTasks.completed);
+  p.progressTracker.recordPageProgress('note', 0, 1, true, true);
+  await note.receiveNoteSyncModify({ path: 'new.md', content: 'REMOTE', contentHash: hash('REMOTE'), sha: sha('REMOTE'), rev: 100, pageIndex: 0 }, p);
+  assert.equal(p.progressTracker.isTypeFullyDone('note'), true, 'transport pages alone are complete');
+  note.commitNoteSyncRound(p);
+  assert.equal(metadata.get('lastNoteSyncTime'), 60, 'unconfirmed forced upload must retain the previous successful cursor');
+  assert.equal(p.pendingNoteModifies.has('new.md'), true, 'recovery intent must exist before the first send');
+  assert.equal(p.localStorageManager.loadPending('pendingNoteModifies').has('new.md'), true);
+});
+
+
+await test('unchanged NoteSync inventories do not register uploads waiting for ACKs that never arrive', async () => {
+  const { p, put, metadata } = fixture();
+  put('same.md', 'same', 50);
+  note.beginNoteSyncRound(p, false);
+  await operator.handleRequestSend(p, 'note', {
+    lastTime: 60, notes: [{ path: 'same.md', contentHash: hash('same'), mtime: 1 }], delNotes: [], missingNotes: []
+  }, { files: [], delFiles: [], missingFiles: [] }, { configs: [], delConfigs: [], missingConfigs: [] },
+  { folders: [], delFolders: [], missingFolders: [] });
+  assert.equal(p.pendingNoteModifies.size, 0, 'a hash-only inventory does not imply a NoteModify was sent');
+  await finish(p, 200, {});
+  assert.equal(metadata.get('lastNoteSyncTime'), 200, 'an unchanged round still commits');
+});
+
+for (const reload of [false, true]) await test('End-before-ACK recovery survives ' + (reload ? 'plugin reload' : 'ordinary reset') + ' and resubmits old-mtime renamed content', async () => {
+  const { p, put, files, sent, metadata } = fixture();
+  const { SyncProgressTracker } = load('src/lib/sync/sync_progress_tracker.ts');
+  p.progressTracker = new SyncProgressTracker(); p.progressTracker.reset(['note']);
+  p.recordSyncCompleted = (type, page) => { p.noteSyncTasks.completed++; p.progressTracker.recordCompleted(type, page); };
+  p.serverMerge.maxQueuedBytes = 10;
+  metadata.set('lastNoteSyncTime', 90);
+  put('old.md', 'base', 50); put('other.md', '12345678');
+  await p.serverMerge.requestUploadFromDisk('other.md');
+  note.beginNoteSyncRound(p, false);
+  await note.receiveNoteSyncRename({ oldPath: 'old.md', path: 'new.md', contentHash: hash('REMOTE'),
+    sha: sha('REMOTE'), rev: 100, mtime: 80 }, p);
+  await note.receiveNoteSyncEnd({ lastTime: 200, needModifyCount: 1 }, p);
+  p.progressTracker.setDownloadTotal('note', 1);
+  p.progressTracker.recordUploadComplete('note', p.noteSyncTasks.completed);
+  p.progressTracker.recordPageProgress('note', 0, 1, true, true);
+  await note.receiveNoteSyncModify({ path: 'new.md', content: 'REMOTE', contentHash: hash('REMOTE'), sha: sha('REMOTE'), rev: 100, pageIndex: 0 }, p);
+  assert.equal(p.progressTracker.isTypeFullyDone('note'), true);
+  note.commitNoteSyncRound(p);
+  assert.equal(metadata.get('lastNoteSyncTime'), 90, 'End is not successful before the queued upload ACK');
+  assert.equal(p.localStorageManager.loadPending('pendingNoteModifies').has('new.md'), true);
+  if (reload) {
+    p.serverMerge.dispose();
+    operator.cancelSync(p);
+    p.pendingNoteModifies = p.localStorageManager.loadPending('pendingNoteModifies');
+    p.fileHashManager = new FileHashManager(p);
+    await p.fileHashManager.initialize();
+    p.serverMerge = createServerMerge(p);
+  } else {
+    p.serverMerge.reset();
+    p.isSyncing = false;
+  }
+  p.serverMerge.supported = true;
+  await operator.handleSync(p, true, 'note');
+  for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve));
+  for (const { action, data } of [...sent]) if (action === 'NoteModify' && data.path === 'other.md' && p.serverMerge.acceptsAck(data)) {
+    await note.receiveNoteModifyAck({ path: data.path, opId: data.opId, rev: 102, sha: sha(data.content) }, p);
+  }
+  for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve));
+  const uploads = sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'new.md');
+  assert.equal(uploads.length, 1, 'incremental scan explicitly retries the pending old-mtime body');
+  assert.equal(uploads[0].data.baseSha, sha('base'), 'restart preserves the actual old ancestor');
+  assert.equal(uploads[0].data.content, 'base');
+  await note.receiveNoteModifyAck({ path: 'new.md', opId: uploads[0].data.opId, rev: 101,
+    merged: true, content: 'REMOTE', sha: sha('REMOTE') }, p);
+  for (const { action, data } of [...sent]) if (action === 'NoteModify' && data.path === 'other.md' && p.serverMerge.acceptsAck(data)) {
+    await note.receiveNoteModifyAck({ path: data.path, opId: data.opId, rev: 102, sha: sha(data.content) }, p);
+  }
+  assert.equal(files.get('new.md').content, 'REMOTE');
+  assert.equal(p.pendingNoteModifies.size, 0, 'only settled uploads are cleared');
+  await note.receiveNoteSyncEnd({ lastTime: 300 }, p);
+  p.progressTracker.setDownloadTotal('note', 0);
+  p.progressTracker.recordUploadComplete('note', p.noteSyncTasks.completed);
+  note.commitNoteSyncRound(p);
+  assert.equal(metadata.get('lastNoteSyncTime'), 300, 'recovered round can subsequently finish');
+});
+
+
+await test('inventory Mtime cannot settle an unrelated in-flight serverMerge upload or erase its recovery intent', async () => {
+  const { p, put, sent, files } = fixture();
+  put('same.md', 'base', 50);
+  files.get('same.md').content = 'LOCAL';
+  await p.serverMerge.requestUploadFromDisk('same.md', true);
+  const op = sent.find(({ action }) => action === 'NoteModify').data;
+  await note.receiveNoteSyncMtime({ path: 'same.md', mtime: 80, ctime: 1 }, p);
+  for (let i = 0; i < 2; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(p.serverMerge.acceptsAck(op), true, 'Mtime has no matching opId and cannot release the upload');
+  assert.equal(p.pendingNoteModifies.has('same.md'), true);
+  await note.receiveNoteModifyAck({ path: 'same.md', opId: op.opId, rev: 100, sha: sha('LOCAL') }, p);
+  assert.equal(p.pendingNoteModifies.size, 0, 'the actual ACK settles and clears the recovery marker');
+});
+
+await test('rename metadata failure after moving source never attaches the previous target ancestor to it', async () => {
+  const { p, put, files, sent } = fixture();
+  const base = 'base\nmiddle\nsource old\n', local = 'LOCAL\nmiddle\nsource old\n', remote = 'base\nmiddle\nREMOTE\n';
+  put('old.md', base, 50); files.get('old.md').content = local;
+  put('new.md', remote, 60); files.get('new.md').content = 'TARGET complete draft';
+  const modify = p.app.vault.modify;
+  p.app.vault.modify = async () => { throw new Error('metadata IO failed after source move'); };
+  await note.receiveNoteSyncRename({ oldPath: 'old.md', path: 'new.md', contentHash: hash(remote), sha: sha(remote), rev: 100, mtime: 80 }, p);
+  assert.equal(p.noteSyncTasks.failed, 1);
+  assert.equal(files.get('new.md').content, local);
+  p.app.vault.modify = modify;
+  p.serverMerge.reset(); p.serverMerge.supported = true;
+  await p.serverMerge.requestUploadFromDisk('new.md', true);
+  const upload = sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'new.md').at(-1).data;
+  assert.equal(upload.baseSha, sha(base), 'retry must use the actual moved source ancestor');
+  assert.notEqual(upload.baseSha, sha(remote), 'the historical target ancestor must not fast-forward over REMOTE');
+  assert.ok([...files.values()].some(file => file.content === 'TARGET complete draft'));
+});
+
+
+await test('source rename IO failure before the move does not block same-rev remote recovery or leave missing-path pending', async () => {
+  const { p, put, files, metadata } = fixture();
+  put('old.md', 'base', 50);
+  const rename = p.app.vault.rename;
+  p.app.vault.rename = async () => { throw new Error('rename failed before moving source'); };
+  await note.receiveNoteSyncRename({ oldPath: 'old.md', path: 'new.md', contentHash: hash('REMOTE'), sha: sha('REMOTE'), rev: 100, mtime: 80 }, p);
+  assert.equal(files.has('old.md'), true);
+  assert.equal(files.has('new.md'), false);
+  p.app.vault.rename = rename;
+  p.serverMerge.reset(); p.serverMerge.supported = true;
+  await note.receiveNoteSyncModify({ path: 'new.md', content: 'REMOTE', contentHash: hash('REMOTE'), sha: sha('REMOTE'), rev: 100 }, p);
+  assert.equal(files.get('new.md')?.content, 'REMOTE', 'the unprocessed remote revision must still be recoverable');
+  assert.equal(p.pendingNoteModifies.has('new.md'), false);
+  p.pendingNoteModifies.set('phantom.md', '');
+  await operator.handleSync(p, true, 'note');
+  assert.equal(p.pendingNoteModifies.has('phantom.md'), false, 'ordinary retry drops markers for files that never moved');
 });
 
 assert.equal(failures.length, 0, failures.join(', '));

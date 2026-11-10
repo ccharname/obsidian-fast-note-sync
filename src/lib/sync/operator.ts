@@ -3,7 +3,7 @@ import { TFolder, TFile, normalizePath } from "obsidian";
 import { receiveFileUpload, receiveFileSyncUpdate, receiveFileSyncDelete, receiveFileSyncMtime, receiveFileSyncChunkDownload, receiveFileSyncEnd, checkAndUploadAttachments, receiveFileSyncRename, receiveFileRenameAck, receiveFileUploadAck, receiveFileDeleteAck, isPluginUnloading, sweepStalledDownloadSessions } from "./operator_file";
 import { hashContent, hashContentAsync, dump, isPathExcluded, isFolderSyncPathExcluded, configIsPathExcluded, getConfigSyncCustomDirs, generateUUID, showSyncNotice, isLargeBinarySyncRisk, describeBinarySyncLimit, hashFileAsync, formatFileSize, yieldToMain, getPluginDir } from "../utils/helpers";
 import { receiveConfigSyncModify, receiveConfigUpload, receiveConfigSyncMtime, receiveConfigSyncDelete, receiveConfigSyncEnd, configAllPaths, receiveConfigSyncClear, receiveConfigModifyAck, receiveConfigDeleteAck } from "./operator_config";
-import { beginNoteSyncRound, commitNoteSyncRound, abortNoteSyncRound, dispatchOfflineNoteDeletes, receiveNoteSyncModify, receiveNoteUpload, receiveNoteSyncMtime, receiveNoteSyncDelete, receiveNoteSyncEnd, receiveNoteSyncRename, receiveNoteModifyAck, receiveNoteRenameAck, receiveNoteDeleteAck } from "./operator_note";
+import { beginNoteSyncRound, commitNoteSyncRound, abortNoteSyncRound, hasPendingNoteUploads, dispatchOfflineNoteDeletes, receiveNoteSyncModify, receiveNoteUpload, receiveNoteSyncMtime, receiveNoteSyncDelete, receiveNoteSyncEnd, receiveNoteSyncRename, receiveNoteModifyAck, receiveNoteRenameAck, receiveNoteDeleteAck } from "./operator_note";
 import { SyncMode, SnapFile, SnapFolder, SyncEndData, PathHashFile, NoteSyncData, FileSyncData, ConfigSyncData, FolderSyncData } from "../utils/types";
 import { receiveFolderSyncModify, receiveFolderSyncDelete, receiveFolderSyncRename, receiveFolderSyncEnd } from "./operator_folder";
 import { FileCloudPreview } from "../storage/file_cloud_preview";
@@ -201,7 +201,7 @@ export function checkSyncCompletion(plugin: FastSync, intervalId?: number, _sync
   const bufferedAmount = ws && ws.readyState === WebSocket.OPEN ? ws.bufferedAmount : 0;
 
   // 模块进度的完成判定：使用新版基于 SyncPage 的 isTypeFullyDone 进行精确判断
-  const noteSyncDone = plugin.progressTracker.isTypeFullyDone('note');
+  const noteSyncDone = plugin.progressTracker.isTypeFullyDone('note') && !hasPendingNoteUploads?.(plugin);
   const fileSyncDone = plugin.progressTracker.isTypeFullyDone('file');
   const configSyncDone = plugin.progressTracker.isTypeFullyDone('setting');
   const folderSyncDone = plugin.progressTracker.isTypeFullyDone('folder');
@@ -524,9 +524,11 @@ async function receiveSyncEndWrapper(data: unknown, plugin: FastSync, type: "not
     plugin.fileHashManager.removeFileHashes(plugin.pendingDeleteNotePaths)
     plugin.pendingDeleteNotePaths.clear()
     // 同步结束，提交本轮同步中可能产生的待确认上传 hash
-    plugin.fileHashManager.setFileHashes(plugin.pendingNoteModifies, (path) => plugin.app.vault.getFileByPath(path)?.stat)
-    plugin.pendingNoteModifies.clear()
-    plugin.localStorageManager.clearPending('pendingNoteModifies')
+    if (!plugin.serverMerge?.supported) {
+      plugin.fileHashManager.setFileHashes(plugin.pendingNoteModifies, (path) => plugin.app.vault.getFileByPath(path)?.stat)
+      plugin.pendingNoteModifies.clear()
+      plugin.localStorageManager.clearPending('pendingNoteModifies')
+    }
     // 同步结束，提交扫描阶段计算出的哈希 (Commit hashes calculated during scan)
     commitScannedHashes(plugin.scannedNoteHashes, (m) => plugin.fileHashManager.bulkSetFromScanned(m));
     // 同步结束，强制落盘本轮防抖累积的哈希写入
@@ -673,6 +675,14 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
     plugin.currentSyncType = isLoadLastTime ? 'incremental' : 'full';
     plugin.syncTypeCompleteCount = 0;
     plugin.resetSyncTasks();
+
+    if (plugin.serverMerge?.supported) {
+      let pruned = false;
+      for (const path of plugin.pendingNoteModifies.keys()) {
+        if (!plugin.app.vault.getFileByPath(path)) { plugin.pendingNoteModifies.delete(path); pruned = true; }
+      }
+      if (pruned) plugin.localStorageManager.savePending('pendingNoteModifies', plugin.pendingNoteModifies);
+    }
 
     const shouldSyncNotes = syncMode === "auto" || syncMode === "note";
     const shouldSyncConfigs = syncMode === "auto" || syncMode === "config";
@@ -852,6 +862,9 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
           if (file instanceof TFile) {
             if (isPathExcluded(file.path, plugin)) continue;
             if (file.extension === "md") {
+              if (plugin.serverMerge?.supported && plugin.pendingNoteModifies.has(file.path)) {
+                void plugin.serverMerge.requestUploadFromDisk(file.path, true);
+              }
               if (isLoadLastTime
                 && file.stat.mtime < Number(plugin.localStorageManager.getMetadata("lastNoteSyncTime"))
                 && plugin.fileHashManager.getPathHash(file.path) !== null
@@ -1291,8 +1304,7 @@ export function cancelSync(plugin: FastSync): void {
   plugin.syncState.pendingConfigPushPageIndex.clear();
   plugin.pendingConfigModifies.clear();
   plugin.localStorageManager.clearPending('pendingConfigModifies');
-  plugin.pendingNoteModifies.clear();
-  plugin.localStorageManager.clearPending('pendingNoteModifies');
+  // 取消只清运行时任务；已有持久 pending 是下次扫描/重启的恢复入口。
   plugin.pendingUploadHashes.clear();
   plugin.localStorageManager.clearPending('pendingUploadHashes');
 
@@ -1658,6 +1670,8 @@ export const handleRequestSend = async function (plugin: FastSync, syncMode: Syn
         ...(missingChunk.length > 0 ? { missingNotes: missingChunk } : {}),
       }),
       () => {
+        // 清单仅比较 hash；相同笔记不会收到 ACK，不能登记成未确认正文上传。
+        if (plugin.serverMerge?.supported) return;
         for (const note of noteData.notes) {
           plugin.pendingNoteModifies.set(note.path, note.contentHash);
         }
