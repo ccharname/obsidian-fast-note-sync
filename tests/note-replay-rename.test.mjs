@@ -34,6 +34,41 @@ function load(file, extra = {}) {
 const { FileHashManager } = load('src/lib/storage/file_hash_manager.ts');
 const merge = load('src/lib/sync/server_merge_client.ts');
 const { createServerMerge } = load('src/lib/sync/server_merge_env.ts', { './server_merge_client': merge });
+const pendingUploads = new Set();
+const uploadFailures = [];
+function createTrackedServerMerge(p) {
+  const client = createServerMerge(p);
+  const request = client.requestUploadFromDisk.bind(client);
+  client.requestUploadFromDisk = (...args) => {
+    const work = request(...args);
+    pendingUploads.add(work);
+    work.then(() => pendingUploads.delete(work), error => {
+      pendingUploads.delete(work);
+      uploadFailures.push(error);
+    });
+    return work;
+  };
+  return client;
+}
+async function within(promise, label) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Timed out waiting for ' + label)), 5000);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+async function tick() {
+  // handleSync intentionally launches uploads without awaiting them. Wait for the
+  // actual send work, including WebCrypto, rather than a fixed number of turns.
+  await within((async () => {
+    do {
+      await Promise.all([...pendingUploads]);
+      await new Promise(resolve => setImmediate(resolve));
+    } while (pendingUploads.size);
+    if (uploadFailures.length) throw uploadFailures.shift();
+  })(), 'background uploads');
+}
 const note = load('src/lib/sync/operator_note.ts');
 const operator = load('src/lib/sync/operator.ts', {
   './operator_note': note,
@@ -84,7 +119,7 @@ function fixture() {
     resetSyncTasks: () => Object.assign(p.noteSyncTasks, { completed: 0, failed: 0, needUpload: 0, needModify: 0, needSyncMtime: 0, needDelete: 0 }),
   };
   p.fileHashManager = new FileHashManager(p);
-  p.serverMerge = createServerMerge(p); p.serverMerge.supported = true;
+  p.serverMerge = createTrackedServerMerge(p); p.serverMerge.supported = true;
   const put = (path, content, rev) => {
     files.set(path, new TFile(path, content));
     if (rev) p.fileHashManager.setFileHash(path, hash(content), 1, Buffer.byteLength(content), rev, sha(content));
@@ -191,7 +226,7 @@ await test('H5: remote rename preserves target draft in an uploaded ordinary con
   const { p, put, files, sent, trashed } = fixture();
   put('old.md', 'synced source', 50); put('new.md', 'complete unuploaded draft\n正文\n');
   await note.receiveNoteSyncRename({ oldPath: 'old.md', path: 'new.md', contentHash: hash('synced source'), rev: 100, sha: sha('synced source') }, p);
-  await new Promise(resolve => setImmediate(resolve));
+  await tick();
   assert.equal(files.get('new.md')?.content, 'synced source');
   assert.equal(trashed.length, 0, 'draft must not be silently trashed');
   const copies = [...files.values()].filter(file => file.path !== 'new.md');
@@ -606,18 +641,18 @@ for (const reload of [false, true]) await test('End-before-ACK recovery survives
     p.pendingNoteModifies = p.localStorageManager.loadPending('pendingNoteModifies');
     p.fileHashManager = new FileHashManager(p);
     await p.fileHashManager.initialize();
-    p.serverMerge = createServerMerge(p);
+    p.serverMerge = createTrackedServerMerge(p);
   } else {
     p.serverMerge.reset();
     p.isSyncing = false;
   }
   p.serverMerge.supported = true;
   await operator.handleSync(p, true, 'note');
-  for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve));
+  await tick();
   for (const { action, data } of [...sent]) if (action === 'NoteModify' && data.path === 'other.md' && p.serverMerge.acceptsAck(data)) {
     await note.receiveNoteModifyAck({ path: data.path, opId: data.opId, rev: 102, sha: sha(data.content) }, p);
   }
-  for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve));
+  await tick();
   const uploads = sent.filter(({ action, data }) => action === 'NoteModify' && data.path === 'new.md');
   assert.equal(uploads.length, 1, 'incremental scan explicitly retries the pending old-mtime body');
   assert.equal(uploads[0].data.baseSha, sha('base'), 'restart preserves the actual old ancestor');
@@ -644,7 +679,7 @@ await test('inventory Mtime cannot settle an unrelated in-flight serverMerge upl
   await p.serverMerge.requestUploadFromDisk('same.md', true);
   const op = sent.find(({ action }) => action === 'NoteModify').data;
   await note.receiveNoteSyncMtime({ path: 'same.md', mtime: 80, ctime: 1 }, p);
-  for (let i = 0; i < 2; i++) await new Promise(resolve => setImmediate(resolve));
+  await tick();
   assert.equal(p.serverMerge.acceptsAck(op), true, 'Mtime has no matching opId and cannot release the upload');
   assert.equal(p.pendingNoteModifies.has('same.md'), true);
   await note.receiveNoteModifyAck({ path: 'same.md', opId: op.opId, rev: 100, sha: sha('LOCAL') }, p);
@@ -691,7 +726,6 @@ await test('source rename IO failure before the move does not block same-rev rem
 
 
 // CC review regressions: real handler/state machine/progress tracker, with only vault/transport IO mocked.
-const tick = async () => { for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve)); };
 function trackedRound(p) {
   const { SyncProgressTracker } = load('src/lib/sync/sync_progress_tracker.ts');
   p.progressTracker = new SyncProgressTracker(); p.progressTracker.reset(['note']);
@@ -709,7 +743,7 @@ async function reconnect(p, reload) {
     p.serverMerge.dispose(); operator.cancelSync(p);
     p.pendingNoteModifies = p.localStorageManager.loadPending('pendingNoteModifies');
     p.fileHashManager = new FileHashManager(p); await p.fileHashManager.initialize();
-    p.serverMerge = createServerMerge(p);
+    p.serverMerge = createTrackedServerMerge(p);
   } else { p.serverMerge.reset(); p.isSyncing = false; }
   p.serverMerge.supported = true;
 }
@@ -885,11 +919,12 @@ await test('L2: same-rev persisted force upgrades an ordinary request still wait
 await test('M2: toggling exclusion while acquiring a content-upload slot blocks the actual send and releases it', async () => {
   const { p, put, files, sent } = fixture();
   put('same.md', 'base', 50); files.get('same.md').content = 'LOCAL';
-  let grant, releases = 0;
-  p.concurrencyLimiter.waitForSlot = () => new Promise(resolve => { grant = resolve; });
+  let grant, releases = 0, slotRequested;
+  const slotReady = new Promise(resolve => { slotRequested = resolve; });
+  p.concurrencyLimiter.waitForSlot = () => new Promise(resolve => { grant = resolve; slotRequested(); });
   p.concurrencyLimiter.releaseSlot = () => { releases++; };
   const upload = p.serverMerge.requestUpload('same.md', 'LOCAL', hash('LOCAL'), true);
-  await tick(); p.settings.excludedPaths = new Set(['same.md']); grant(true);
+  await within(slotReady, 'content-upload slot request'); p.settings.excludedPaths = new Set(['same.md']); grant(true);
   assert.equal(await upload, 'failed'); assert.equal(sent.length, 0); assert.equal(releases, 1);
   assert.equal(p.pendingNoteModifies.has('same.md'), true);
 });
