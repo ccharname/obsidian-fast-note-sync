@@ -943,4 +943,5 @@ await test('L3: known SHA prevents legacy cancellation cleanup from mistaking a 
   assert.ok([...backups.values()].includes('REMOTE'));
 });
 
+await tick(); // Drain late background sends and surface their failures before success.
 assert.equal(failures.length, 0, failures.join(', '));
