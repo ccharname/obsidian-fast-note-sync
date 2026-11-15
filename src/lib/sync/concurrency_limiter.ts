@@ -1,3 +1,4 @@
+import { cancelFileUploadJobs } from "./file_upload_coordinator";
 import type FastSync from "../../main";
 import { dump } from "../utils/helpers";
 
@@ -6,6 +7,7 @@ import { dump } from "../utils/helpers";
  * 用于精确控制基于 ACK 的上行同步任务并发
  */
 export class ConcurrencyLimiter {
+    generation = 0;
     private plugin: FastSync;
     private queue: { key: string; priority: number; resolve: () => void; cancel: () => void }[] = [];
     private activeKeys: Set<string> = new Set();
@@ -23,10 +25,12 @@ export class ConcurrencyLimiter {
      * @param isFifo 是否是 FIFO 类型的 ACK (ACK 中不带 path)
      * @param priority 优先级（数字越大优先级越高，用于实现先上传后下载等逻辑）
      */
-    public async waitForSlot(key: string, isFifo: boolean = false, priority: number = 0): Promise<boolean> {
+    public async waitForSlot(key: string, isFifo: boolean = false, priority: number = 0, reuseHeld: boolean = false): Promise<boolean> {
         if (!this.plugin.settings.concurrencyControlEnabled) {
             return true;
         }
+
+        if (reuseHeld && this.activeKeys.has(key)) return true;
 
         if (this.activeKeys.size < this.plugin.settings.maxConcurrentUploads) {
             this.activeKeys.add(key);
@@ -115,6 +119,8 @@ export class ConcurrencyLimiter {
      * 清空所有并发状态（通常用于断网或重连）
      */
     public clear(): void {
+        this.generation++;
+        cancelFileUploadJobs(this.plugin);
         dump(`Concurrency: Clearing all ${this.activeKeys.size} active tasks and ${this.queue.length} queued tasks.`);
         // Settle cancelled waiters without granting slots or starting binary reads.
         const pending = this.queue;

@@ -41,7 +41,8 @@ const context = await esbuild.context({
 		"stream",
 		"util",
 		"child_process",
-		"zlib"
+		"zlib",
+		"node:timers"
 	],
 	format: "cjs",
 	target: "es2018",

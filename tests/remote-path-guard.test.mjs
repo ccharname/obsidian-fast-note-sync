@@ -31,6 +31,7 @@ function load(name) {
     require(id) {
       if (id === "obsidian") return { TFile, TFolder, normalizePath, Platform: { isMobile: false } };
       if (id === "./remote_path_guard") return load("remote_path_guard");
+      if (id === "./file_upload_coordinator") return load("file_upload_coordinator");
       if (id === "./sync_log_manager") return { SyncLogManager: logger };
       if (id === "../utils/helpers") return helpers;
       if (id === "../storage/file_cloud_preview") return { FileCloudPreview: { isRestrictedType: () => false } };

@@ -1,5 +1,5 @@
 import { moment } from "obsidian";
-import { dump, dumpError, isWsUrl, showSyncNotice } from "../utils/helpers";
+import { dump, dumpError, isWsUrl, showSyncNotice, sleep } from "../utils/helpers";
 
 const safeMoment = moment as unknown as (inp?: unknown) => { format(format: string): string };
 
@@ -382,7 +382,7 @@ export class WebSocketClient {
     }
 
     while (this.ws.bufferedAmount > maxBufferSize) {
-      await new Promise(resolve => window.setTimeout(resolve, 50));
+      await sleep(50);
     }
   }
 
@@ -467,6 +467,8 @@ export class WebSocketClient {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return 'closed';
     }
+
+    if (before && before()) return 'cancelled';
 
     const prefixBytes = new TextEncoder().encode(prefix);
     let dataToSend: Uint8Array;

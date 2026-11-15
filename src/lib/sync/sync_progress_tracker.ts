@@ -581,6 +581,7 @@ export class SyncProgressTracker {
    * 生成进度明细文本。
    */
   getDetailText(): string {
+    if (this.isForcedComplete) return '';
     const parts: string[] = [];
     
     // Custom label mappings / 自定义标签映射

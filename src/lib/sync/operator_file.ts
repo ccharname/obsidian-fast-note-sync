@@ -1,3 +1,4 @@
+import { getFileUploadCoordinator, acquireFileUploadBuffer, releaseFileUploadBuffer, acknowledgeFileUpload, getFileUploadSessionPath, getFileUploadSessionTicket, cancelFileUploadSession, type UploadTicket } from "./file_upload_coordinator";
 import { blockAliasedRemoteMutation } from "./remote_path_guard";
 import { TFile, TAbstractFile, normalizePath, Platform } from "obsidian";
 
@@ -21,6 +22,7 @@ export let isPluginUnloading = false;
 
 // 会话 ID 到文件路径的映射，用于处理 463 会话不存在错误
 const sessionIdToPathMap = new Map<string, string>()
+const uploadSessionOwners = new Map<string, UploadTicket>()
 
 // 大文件跳过同步通知去重：本会话内已提示过的 "path|size"，避免同一文件每轮同步重复弹 toast
 const sessionLargeFileNotified = new Set<string>()
@@ -482,7 +484,11 @@ export const fileRename = async function (file: TAbstractFile, oldfile: string, 
 /**
  * 接收服务端文件上传指令 (FileUpload)
  */
-export const receiveFileUpload = async function (data: FileUploadMessage, plugin: FastSync) {
+const receiveFileUploadOnce = async function (data: FileUploadMessage, plugin: FastSync, ticket: UploadTicket) {
+  const generation = plugin.concurrencyLimiter.generation;
+  ticket.generation = generation;
+  const isCurrent = () => !ticket.cancelled && !plugin.unloaded && generation === plugin.concurrencyLimiter.generation;
+  const releaseUploadSlot = () => { if (generation === plugin.concurrencyLimiter.generation) plugin.concurrencyLimiter.releaseSlot(data.path); };
   if (plugin.settings.syncEnabled == false) return
 
   if (plugin.settings.readonlySyncEnabled) {
@@ -495,7 +501,6 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
     return
   }
   dump(`Receive file need upload (queued): `, data.path, data.sessionId)
-  sessionIdToPathMap.set(data.sessionId, data.path)
 
   const file = plugin.app.vault.getFileByPath(normalizePath(data.path))
   if (!file) {
@@ -525,10 +530,18 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
   // 始终在进入并发队列前就累加待上传分片总数，以精确驱动进度条
   plugin.totalChunksToUpload += actualTotalChunks
 
+  let sent = false;
   const runUpload = async () => {
     // 标记该路径进入活跃上传状态
-    if (!await plugin.concurrencyLimiter.waitForSlot(data.path, false, 10)) return;
-    activeUploadsMap.set(data.path, { cancelled: false });
+    if (!await plugin.concurrencyLimiter.waitForSlot(data.path, false, 10, true)) return;
+    if (!isCurrent()) { releaseUploadSlot(); return; }
+    ticket.slotAcquired = true;
+    if (!await acquireFileUploadBuffer(plugin, ticket)) { releaseUploadSlot(); return; }
+    if (!isCurrent()) { releaseFileUploadBuffer(plugin); releaseUploadSlot(); return; }
+    const uploadState = { cancelled: false };
+    activeUploadsMap.set(data.path, uploadState);
+    sessionIdToPathMap.set(data.sessionId, data.path);
+    uploadSessionOwners.set(data.sessionId, ticket);
 
     // 断点续传 checkpoint key，提升到 try 外以便 catch 块中也能清除
     // Resume checkpoint key hoisted outside try so the catch block can also remove it
@@ -544,14 +557,17 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
       } catch (e) {
         dump(`Failed to read file for upload: ${data.path}`, e)
       }
+      if (!isCurrent()) { releaseUploadSlot(); return; }
       if (!content) {
         plugin.totalChunksToUpload -= actualTotalChunks
-        plugin.concurrencyLimiter.releaseSlot(data.path)
+        releaseUploadSlot()
         plugin.recordSyncCompleted('file', data.pageIndex)
         return;
       }
 
+      if (!isCurrent()) { releaseUploadSlot(); return; }
       const contentHash = await hashFileAsync(plugin.app, file.path)
+      if (!isCurrent()) { releaseUploadSlot(); return; }
       logMemorySnapshot(`after upload hash ${data.path}`)
       // 将 hash 暂存到 pending map，等待服务端 FileUploadAck 后再写入 hashManager
       // Temporarily store hash in pending map, update hashManager only after server FileUploadAck
@@ -625,7 +641,7 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
           BINARY_PREFIX_FILE_SYNC,
           () => {
             // before: 检查是否已被取消(例如由于文件在上传过程中被删除)
-            if (isPluginUnloading || activeUploadsMap.get(data.path)?.cancelled) {
+            if (!isCurrent() || isPluginUnloading || activeUploadsMap.get(data.path)?.cancelled) {
               dump(`Upload aborted for ${data.path} (cancelled before send)`);
               return true; // 返回 true 表示应该取消发送
             }
@@ -633,6 +649,7 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
           },
           () => {
             // after: 发送成功后更新计数和日志
+            if (!isCurrent()) return;
             plugin.uploadedChunksCount++
             const currentProgress = Math.floor(((i + 1) / actualTotalChunks) * 100);
             const isLastChunk = (i + 1) === actualTotalChunks;
@@ -669,6 +686,7 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
         // Connection unavailable: the chunk was never actually sent. Break immediately and keep the
         // resume checkpoint intact (don't clear it, don't bump the completed counter) so the next
         // sync round can resume from the checkpoint after reconnect.
+        if (!isCurrent()) { releaseUploadSlot(); return; }
         if (sendResult === 'closed') {
           dump(`Upload interrupted for ${data.path} at chunk ${i}/${actualTotalChunks} (connection closed), will resume after reconnect`);
           SyncLogManager.getInstance().addOrUpdateLog({
@@ -679,7 +697,7 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
             status: 'pending',
             message: '连接已断开，等待重连后续传'
           });
-          plugin.concurrencyLimiter.releaseSlot(data.path);
+          releaseUploadSlot();
           return;
         }
 
@@ -688,17 +706,19 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
           // 取消时清除 checkpoint，避免使用已失效的会话
           // Clear checkpoint on cancel to avoid stale session reuse
           try { plugin.app.saveLocalStorage(checkpointKey, null) } catch { /* ignore */ }
-          plugin.concurrencyLimiter.releaseSlot(data.path)
+          releaseUploadSlot()
           plugin.recordSyncCompleted('file', data.pageIndex)
           return;
         }
 
         // 让出主线程，手机端给更多呼吸时间
         await sleep(sleepTime)
+        if (!isCurrent()) { releaseUploadSlot(); return; }
       }
 
       // 手动置空辅助 GC
       content = null;
+      sent = true;
 
       // 上传完成后，如果开启了附件云预览 - 上传后删除，则删除本地附件
       if (plugin.settings.cloudPreviewEnabled && plugin.settings.cloudPreviewAutoDeleteLocal) {
@@ -713,10 +733,11 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
 
         void (async () => {
           await sleep(2000);
-          if (isPluginUnloading) return;
+          if (!isCurrent() || isPluginUnloading) return;
           try {
             const apiService = new HttpApiService(plugin);
             const serverInfo = await apiService.getFileInfo(file.path);
+            if (!isCurrent()) return;
 
             if (serverInfo) {
               // 核对 path、size、mtime 是否一致
@@ -741,21 +762,37 @@ export const receiveFileUpload = async function (data: FileUploadMessage, plugin
         })();
       }
     } catch (e) {
+      if (!isCurrent()) { releaseUploadSlot(); return; }
       dump(`Upload process error for ${data.path}`, e);
       // 异常退出时清除 checkpoint，避免下次用无效的 sessionId 继续
       try { plugin.app.saveLocalStorage(checkpointKey, null) } catch { /* ignore */ }
       plugin.totalChunksToUpload -= actualTotalChunks
-      plugin.concurrencyLimiter.releaseSlot(data.path);
+      releaseUploadSlot();
       plugin.recordSyncCompleted('file', data.pageIndex)
     } finally {
       // 任务结束（完成或取消/失败），移除活跃标记
-      activeUploadsMap.delete(data.path);
-      sessionIdToPathMap.delete(data.sessionId);
+      if (activeUploadsMap.get(data.path) === uploadState) activeUploadsMap.delete(data.path);
+      if (uploadSessionOwners.get(data.sessionId) === ticket) {
+        uploadSessionOwners.delete(data.sessionId);
+        sessionIdToPathMap.delete(data.sessionId);
+      }
+      releaseFileUploadBuffer(plugin);
     }
   }
 
   // 任务立即执行，受外部 ConcurrencyLimiter 控制
-  void runUpload()
+  await runUpload()
+  return sent
+}
+
+export const receiveFileUpload = async function (data: FileUploadMessage, plugin: FastSync) {
+  if (plugin.unloaded || plugin.settings.syncEnabled === false) return;
+  const coordinator = getFileUploadCoordinator(plugin, path => {
+    const active = activeUploadsMap.get(path);
+    if (active) active.cancelled = true;
+  });
+  await coordinator.run(normalizePath(data.path), data.sessionId,
+    async ticket => !!(await receiveFileUploadOnce(data, plugin, ticket)));
 }
 
 /**
@@ -1537,6 +1574,7 @@ export const receiveFileUploadAck = function (data: { lastTime?: number; path?: 
   const pushPageIndex = data.path ? plugin.syncState.pendingFilePushPageIndex.get(data.path) : undefined;
   if (data.path) plugin.syncState.pendingFilePushPageIndex.delete(data.path)
   plugin.recordSyncCompleted('file', pushPageIndex)
+  if (data.path) acknowledgeFileUpload(plugin, normalizePath(data.path));
 }
 
 // 收到 FileDeleteAck，仅当路径仍在 pending set 中时才从 hashManager 移除
@@ -1558,13 +1596,19 @@ export const receiveFileDeleteAck = function (data: { lastTime?: number; path?: 
  * 收到服务端 463 错误（上传附件会话不存在），清理该文件的活跃上传状态并增加完成计数
  */
 export const receiveFileUploadSessionNotFound = function (sessionId: string, plugin: FastSync) {
-  const path = sessionIdToPathMap.get(sessionId)
+  const ticket = uploadSessionOwners.get(sessionId) ?? getFileUploadSessionTicket(plugin, sessionId);
+  if (ticket && (ticket.cancelled || (ticket.generation !== undefined && ticket.generation !== plugin.concurrencyLimiter.generation))) {
+    cancelFileUploadSession(plugin, sessionId);
+    return;
+  }
+  const path = sessionIdToPathMap.get(sessionId) ?? getFileUploadSessionPath(plugin, sessionId)
   if (path) {
+    cancelFileUploadSession(plugin, sessionId);
     const active = activeUploadsMap.get(path)
-    if (active) {
+    if (active && (!ticket || uploadSessionOwners.get(sessionId) === ticket)) {
       active.cancelled = true
     }
-    plugin.concurrencyLimiter.releaseSlot(path)
+    if (!ticket || ticket.slotAcquired) plugin.concurrencyLimiter.releaseSlot(path)
     plugin.fileSyncTasks.failed++
     plugin.fileSyncTasks.completed++
     dump(`FileUploadSessionNotFound: Cleaned active state and completed task for path: ${path} (${sessionId})`)

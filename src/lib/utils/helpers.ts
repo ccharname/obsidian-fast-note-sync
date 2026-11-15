@@ -436,7 +436,7 @@ export const hashContentAsync = async function (content: string): Promise<string
     hash &= hash
 
     if (i > 0 && i % yieldSize === 0) {
-      await new Promise((resolve) => window.setTimeout(resolve, 0))
+      await sleep(0)
     }
   }
   return String(hash)
@@ -595,7 +595,7 @@ async function computeRollingHash(view: Uint8Array | null): Promise<string> {
     hash &= hash
 
     if (i > 0 && i % yieldSize === 0) {
-      await new Promise((resolve) => window.setTimeout(resolve, 0))
+      await sleep(0)
     }
   }
   const result = String(hash)
@@ -650,7 +650,13 @@ export const getSafeCtime = function (stat: { ctime?: number; mtime?: number }):
 /**
  * 延迟执行 (让出主线程)
  */
-export const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+export const sleep = (ms: number): Promise<void> => new Promise((resolve) => {
+  if (Platform.isDesktopApp) {
+    require("node:timers").setTimeout(resolve, ms)
+  } else {
+    window.setTimeout(resolve, ms)
+  }
+})
 
 /**
  * 让出主线程 (优先 MessageChannel, 避免 setTimeout(0) 被 Chromium 钳制到 4ms)

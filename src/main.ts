@@ -1,3 +1,4 @@
+import { cancelFileUploadJobs } from "./lib/sync/file_upload_coordinator";
 import { Plugin, Platform, addIcon } from "obsidian";
 
 import { dump, dumpError, checkAndNotifyCaseConflict, setLogEnabled, isPathMatch, parseRules, stringifyRules, getPluginDir, showSyncNotice, loadApiToken, saveApiToken, loadApiUrl, saveApiUrl, loadVault, saveVault, loadAutoRedirect, saveAutoRedirect, loadWsPreProbe, saveWsPreProbe, obfuscateToken } from "./lib/utils/helpers";
@@ -661,6 +662,7 @@ export default class FastSync extends Plugin {
     this.serverMerge?.dispose()  // 清定时器与全部路径状态 / clear timers and per-path state
     // 取消当前正在进行的同步，重置运行时状态
     cancelSync(this)
+    cancelFileUploadJobs(this)
     abortAllFileOperations()
     this.localStorageManager?.stopWatch()
     this.shareIndicatorManager?.unload()

@@ -72,6 +72,32 @@ export const clearAllHashes = async (plugin: FastSync) => {
 
 type ScannedHashMap = Map<string, { hash: string; mtime: number; size: number }>;
 
+const scanHashPools = new WeakMap<FastSync["app"], Set<Promise<void>>>();
+
+function getScanHashPool(app: FastSync["app"]): Set<Promise<void>> {
+  let pool = scanHashPools.get(app);
+  if (!pool) {
+    pool = new Set();
+    scanHashPools.set(app, pool);
+  }
+  return pool;
+}
+
+async function settleHashWithTimeout(work: Promise<string>): Promise<string> {
+  let timeoutId: number | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error("Hash timeout")), 15000);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    await work.catch(() => undefined);
+  }
+}
+
 /**
  * 提交扫描期算出的哈希，并只移除本次已提交的条目。
  * scannedXxxHashes 是挂在 syncState 上的全局表，整表 clear 会连带清掉另一轮
@@ -809,10 +835,20 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
       // the MAX_HASH_PER_CYCLE budget is unaffected by concurrency.
       const MAX_CONCURRENT_HASH = 6;
       const hashInFlight = new Set<Promise<void>>();
+      const sharedHashInFlight = getScanHashPool(plugin.app);
       const scheduleHashTask = async (task: () => Promise<void>) => {
+        while (sharedHashInFlight.size >= MAX_CONCURRENT_HASH) {
+          if (isPluginUnloading || plugin.syncState.activeSyncContext !== context) return;
+          await Promise.race(sharedHashInFlight);
+        }
+        if (isPluginUnloading || plugin.syncState.activeSyncContext !== context) return;
         let p: Promise<void>;
-        p = task().finally(() => hashInFlight.delete(p));
+        p = task().finally(() => {
+          hashInFlight.delete(p);
+          sharedHashInFlight.delete(p);
+        });
         hashInFlight.add(p);
+        sharedHashInFlight.add(p);
         if (hashInFlight.size >= MAX_CONCURRENT_HASH) {
           await Promise.race(hashInFlight);
         }
@@ -893,10 +929,10 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
                 const notePath = file.path, noteMtime = file.stat.mtime, noteCtime = file.stat.ctime, noteSize = file.stat.size;
                 await scheduleHashTask(async () => {
                   try {
-                    const contentHash = await Promise.race([
-                      plugin.app.vault.read(file).then(content => hashContentAsync(content)),
-                      new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(`Hash timeout`)), 15000))
-                    ]);
+                    const contentHash = await settleHashWithTimeout(
+                      plugin.app.vault.read(file).then(content => hashContentAsync(content))
+                    );
+                    if (isPluginUnloading || plugin.syncState.activeSyncContext !== context) return;
                     plugin.scannedNoteHashes.set(notePath, { hash: contentHash, mtime: noteMtime, size: noteSize });
                     const baseHash = plugin.fileHashManager.getPathHash(notePath);
                     notes.push({
@@ -943,10 +979,8 @@ export const handleSync = async function (plugin: FastSync, isLoadLastTime: bool
                 const attPath = file.path, attMtime = file.stat.mtime, attCtime = file.stat.ctime, attSize = file.stat.size;
                 await scheduleHashTask(async () => {
                   try {
-                    const contentHash = await Promise.race([
-                      hashFileAsync(plugin.app, attPath),
-                      new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(`Hash timeout`)), 15000))
-                    ]);
+                    const contentHash = await settleHashWithTimeout(hashFileAsync(plugin.app, attPath));
+                    if (isPluginUnloading || plugin.syncState.activeSyncContext !== context) return;
                     plugin.scannedFileHashes.set(attPath, { hash: contentHash, mtime: attMtime, size: attSize });
                     const baseHash = plugin.fileHashManager.getPathHash(attPath);
                     files.push({

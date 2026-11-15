@@ -19,6 +19,7 @@ function load(file, extra = {}, globals = {}) {
     require: id => id === 'obsidian' ? { normalizePath: x => x, TFile: class {}, Platform: { isMobile: false } }
       : id.includes('helpers') ? helpers
       : id.includes('sync_log_manager') ? { SyncLogManager: { getInstance: () => logs } }
+      : id === './file_upload_coordinator' ? load('src/lib/sync/file_upload_coordinator.ts')
       : extra[id] || {} });
   return module.exports;
 }
