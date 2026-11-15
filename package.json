@@ -13,6 +13,7 @@
     "fix": "eslint --fix src",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "test": "node scripts/run-tests.mjs",
+    "verify": "node scripts/run-checks.mjs",
     "test:path-guard": "node tests/remote-path-guard.test.mjs",
     "test:auth": "node tests/websocket-auth-error.test.mjs",
     "test:mirror": "node tests/file-mirror-restore.test.mjs",
@@ -22,7 +23,8 @@
     "translate": "node scripts/translate-i18n.mjs --model Qwen/Qwen3.6-35B-A3B",
     "tl": "node scripts/translate-i18n.mjs --model Qwen/Qwen3.6-35B-A3B",
     "icons": "node scripts/obfuscate_icons.js --compress --width 300",
-    "proto": "pbjs -t static-module -w es6 -o src/pb/v1/sync.js ../../../../../@GoApps/fast-note-sync-service/internal/proto/v1/sync.proto && pbts -o src/pb/v1/sync.d.ts src/pb/v1/sync.js && node scripts/fix-proto.cjs"
+    "proto": "pbjs -t static-module -w es6 -o src/pb/v1/sync.js ../../../../../@GoApps/fast-note-sync-service/internal/proto/v1/sync.proto && pbts -o src/pb/v1/sync.d.ts src/pb/v1/sync.js && node scripts/fix-proto.cjs",
+    "verify:release": "pnpm run verify && node scripts/release-check.cjs --asset-dir dist/plugin --release"
   },
   "keywords": [],
   "author": "",

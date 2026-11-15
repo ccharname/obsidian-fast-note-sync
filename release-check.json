@@ -1,0 +1,10 @@
+{
+  "repository": "ccharname/obsidian-fast-note-sync",
+  "pluginId": "fast-note-sync",
+  "assets": [
+    "main.js",
+    "manifest.json",
+    "styles.css"
+  ],
+  "requireLuckyBuild": true
+}
